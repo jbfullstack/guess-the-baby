@@ -32,9 +32,19 @@ const gameStateReducer = (state, action) => {
       return { ...state, isAdmin: action.payload };
     
     case 'ADD_PLAYER':
+      // Avoid duplicates
+      const existingPlayer = state.players.find(p => p.name === action.payload.name);
+      if (existingPlayer) return state;
+      
       return {
         ...state,
         players: [...state.players, action.payload]
+      };
+    
+    case 'SET_ALL_PLAYERS':
+      return {
+        ...state,
+        players: action.payload
       };
     
     case 'RESET_GAME':
@@ -44,7 +54,16 @@ const gameStateReducer = (state, action) => {
         currentPhoto: null,
         selectedAnswer: null,
         hasVoted: false,
-        scores: {}
+        votes: [],
+        currentRound: 0
+      };
+
+    case 'RESTORE_STATE':
+      // Full state restoration from server
+      return {
+        ...state,
+        ...action.payload,
+        isConnected: state.isConnected // Preserve connection status
       };
     
     default:
@@ -72,7 +91,9 @@ const initialGameState = {
   gameHistory: [],
   isConnected: false,
   gameId: null,
-  votes: []
+  votes: [],
+  currentRound: 0,
+  isRecovering: false
 };
 
 export const GameProvider = ({ children }) => {
@@ -80,10 +101,9 @@ export const GameProvider = ({ children }) => {
   const [pusher, setPusher] = useState(null);
   const [gameChannel, setGameChannel] = useState(null);
 
-  // Initialize REAL Pusher connection and load photos
+  // Initialize connection and recover state
   useEffect(() => {
-    initializePusher();
-    loadPhotos();
+    initializeApp();
     
     return () => {
       if (pusher) {
@@ -92,11 +112,27 @@ export const GameProvider = ({ children }) => {
     };
   }, []);
 
+  const initializeApp = async () => {
+    try {
+      updateGameState({ isRecovering: true });
+      
+      // 1. Initialize Pusher first
+      await initializePusher();
+      
+      // 2. Recover state from server
+      await recoverGameState();
+      
+      updateGameState({ isRecovering: false });
+    } catch (error) {
+      console.error('Failed to initialize app:', error);
+      updateGameState({ isRecovering: false, isConnected: false });
+    }
+  };
+
   const initializePusher = async () => {
     try {
-      console.log('🚀 Initializing REAL Pusher...');
+      console.log('🚀 Initializing Pusher...');
       
-      // REAL Pusher (not mock!)
       const realPusher = new Pusher('c9eb0b76bcbe61c6a397', {
         cluster: 'eu',
         encrypted: true
@@ -109,12 +145,38 @@ export const GameProvider = ({ children }) => {
       const channel = realPusher.subscribe('baby-game');
       setGameChannel(channel);
       
-      console.log('📡 Channel subscribed:', channel);
-      
       bindPusherEvents(channel);
+      
+      console.log('✅ Pusher connected and events bound');
     } catch (error) {
       console.error('❌ Failed to initialize Pusher:', error);
       updateGameState({ isConnected: false });
+    }
+  };
+
+  const recoverGameState = async () => {
+    try {
+      console.log('🔄 Recovering game state...');
+      
+      const result = await apiService.getGameState();
+      
+      if (result.success) {
+        // Restore complete state
+        dispatch({
+          type: 'RESTORE_STATE',
+          payload: {
+            ...result.gameState,
+            photos: result.photos,
+            names: result.names,
+            gameHistory: result.gameHistory
+          }
+        });
+        
+        console.log('✅ State recovered:', result.gameState);
+      }
+    } catch (error) {
+      console.error('❌ Failed to recover state:', error);
+      // Continue with default state
     }
   };
 
@@ -122,11 +184,20 @@ export const GameProvider = ({ children }) => {
     console.log('🎯 Binding Pusher events...');
 
     channel.bind('player-joined', (data) => {
-      console.log('🎉 Player joined event received:', data);
-      dispatch({
-        type: 'ADD_PLAYER',
-        payload: data.player
-      });
+      console.log('🎉 Player joined:', data);
+      
+      // Update all players if provided, otherwise add single player
+      if (data.allPlayers) {
+        dispatch({
+          type: 'SET_ALL_PLAYERS',
+          payload: data.allPlayers
+        });
+      } else {
+        dispatch({
+          type: 'ADD_PLAYER',
+          payload: data.player
+        });
+      }
     });
 
     channel.bind('game-started', (data) => {
@@ -134,7 +205,10 @@ export const GameProvider = ({ children }) => {
       updateGameState({
         gameMode: 'playing',
         currentPhoto: data.photo,
-        gameId: data.gameId
+        gameId: data.gameId,
+        currentRound: data.currentRound || 1,
+        selectedAnswer: null,
+        votes: []
       });
     });
 
@@ -142,8 +216,10 @@ export const GameProvider = ({ children }) => {
       console.log('📸 Next photo:', data);
       updateGameState({
         currentPhoto: data.photo,
+        currentRound: data.round,
         selectedAnswer: null,
-        votes: []
+        votes: [],
+        scores: data.scores
       });
     });
 
@@ -315,6 +391,9 @@ export const GameProvider = ({ children }) => {
         return { history: [] };
       }
     },
+
+    // Recovery
+    recoverState: recoverGameState,
 
     // State updates
     updateGameState

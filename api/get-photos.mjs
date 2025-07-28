@@ -10,6 +10,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('📷 Loading photos from GitHub...');
+    
     // Load photos from GitHub
     let gameData = { photos: [], names: [] };
     
@@ -20,8 +22,15 @@ export default async function handler(req, res) {
         path: 'gameData.json',
       });
       gameData = JSON.parse(Buffer.from(data.content, 'base64').toString());
+      console.log(`✅ Loaded ${gameData.photos.length} photos`);
     } catch (error) {
+      console.log('📝 No gameData.json found, creating default...');
       // File doesn't exist yet, return empty data
+    }
+
+    // Ensure we have some default names even if no photos
+    if (gameData.names.length === 0) {
+      gameData.names = ['Alice', 'Bob', 'Charlie', 'Diana'];
     }
 
     res.json({
@@ -31,7 +40,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Get photos error:', error);
+    console.error('❌ Get photos error:', error);
     res.status(500).json({ error: error.message });
   }
 }
