@@ -93,6 +93,7 @@ export const GameProvider = ({ children }) => {
     });
 
     channel.bind('player-joined', (data) => {
+      console.log('Player joined event received:', data);
       updateGameState(prev => ({
         players: [...prev.players, data.player]
       }));
