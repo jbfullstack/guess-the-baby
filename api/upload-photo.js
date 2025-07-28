@@ -1,6 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import Pusher from 'pusher';
-import formidable from 'formidable';
+import { IncomingForm } from 'formidable';
 import fs from 'fs';
 
 const octokit = new Octokit({
@@ -27,12 +27,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Parse form data
-    const form = formidable();
-    const [fields, files] = await form.parse(req);
+    // Parse form data with corrected formidable syntax
+    const form = new IncomingForm();
+    const [fields, files] = await new Promise((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve([fields, files]);
+      });
+    });
     
-    const personName = fields.personName[0];
-    const photoFile = files.photo[0];
+    // Handle both array and single values
+    const personName = Array.isArray(fields.personName) ? fields.personName[0] : fields.personName;
+    const photoFile = Array.isArray(files.photo) ? files.photo[0] : files.photo;
 
     if (!photoFile || !personName) {
       return res.status(400).json({ error: 'Photo and person name are required' });
@@ -72,6 +78,7 @@ export default async function handler(req, res) {
       gameData = JSON.parse(Buffer.from(data.content, 'base64').toString());
     } catch (error) {
       // File doesn't exist yet, use defaults
+      console.log('Creating new gameData.json file');
     }
 
     // Add new photo to data
@@ -103,7 +110,7 @@ export default async function handler(req, res) {
       });
       sha = existingFile.data.sha;
     } catch (error) {
-      // File doesn't exist
+      // File doesn't exist, will create new one
     }
 
     await octokit.rest.repos.createOrUpdateFileContents({
@@ -116,10 +123,14 @@ export default async function handler(req, res) {
     });
 
     // Notify all clients via Pusher
-    await pusher.trigger('baby-game', 'photo-uploaded', {
-      photo: newPhoto,
-      names: gameData.names,
-    });
+    try {
+      await pusher.trigger('baby-game', 'photo-uploaded', {
+        photo: newPhoto,
+        names: gameData.names,
+      });
+    } catch (pusherError) {
+      console.warn('Pusher notification failed:', pusherError);
+    }
 
     res.json({ 
       success: true, 
