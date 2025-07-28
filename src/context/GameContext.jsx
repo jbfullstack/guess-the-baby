@@ -31,15 +31,31 @@ export const GameProvider = ({ children }) => {
   const [pusher, setPusher] = useState(null);
   const [gameChannel, setGameChannel] = useState(null);
 
-  // Initialize Pusher connection
+  // Initialize Pusher connection and load photos
   useEffect(() => {
     initializePusher();
+    loadPhotos();
+    
     return () => {
       if (pusher) {
         pusher.disconnect();
       }
     };
   }, []);
+
+  const loadPhotos = async () => {
+    try {
+      const result = await apiService.getPhotos();
+      if (result.success) {
+        updateGameState({
+          photos: result.photos,
+          names: result.names
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load photos:', error);
+    }
+  };
 
   const initializePusher = async () => {
     try {
@@ -123,13 +139,16 @@ export const GameProvider = ({ children }) => {
       });
     },
 
-    // Photo upload
+    // Photo management
     uploadPhoto: async (file, personName) => {
       try {
         const result = await apiService.uploadPhoto(file, personName);
         
         if (result.success) {
-          updateGameState({ names: result.names });
+          updateGameState(prev => ({
+            photos: [...prev.photos, result.photo],
+            names: result.names
+          }));
           console.log('Photo uploaded successfully!');
         }
         
@@ -139,6 +158,44 @@ export const GameProvider = ({ children }) => {
         return { success: false, error: error.message };
       }
     },
+
+    updatePhoto: async (photoId, newName) => {
+      try {
+        const result = await apiService.updatePhoto(photoId, newName);
+        
+        if (result.success) {
+          updateGameState(prev => ({
+            photos: prev.photos.map(photo => 
+              photo.id === photoId ? { ...photo, person: newName } : photo
+            )
+          }));
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('Update failed:', error);
+        throw error;
+      }
+    },
+
+    deletePhoto: async (photoId) => {
+      try {
+        const result = await apiService.deletePhoto(photoId);
+        
+        if (result.success) {
+          updateGameState(prev => ({
+            photos: prev.photos.filter(photo => photo.id !== photoId)
+          }));
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('Delete failed:', error);
+        throw error;
+      }
+    },
+
+    refreshPhotos: loadPhotos,
 
     // Game management
     joinGame: async (playerName) => {

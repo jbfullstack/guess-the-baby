@@ -32,7 +32,7 @@ class ApiService {
     }
   }
 
-  // Photo upload with FormData
+  // Photo management
   async uploadPhoto(file, personName) {
     try {
       const formData = new FormData();
@@ -52,13 +52,25 @@ class ApiService {
     }
   }
 
+  async getPhotos() {
+    return this.call('get-photos');
+  }
+
+  async updatePhoto(photoId, newName) {
+    return this.call('update-photo', { photoId, newName }, 'PUT');
+  }
+
+  async deletePhoto(photoId) {
+    return this.call('delete-photo', { photoId }, 'DELETE');
+  }
+
   // Game-specific API calls
   async joinGame(playerName) {
     return this.call('join-game', { playerName }, 'POST');
   }
 
   async startGame(settings) {
-    return this.call('start-game', { settings }, 'POST');
+    return this.call('start-game', settings, 'POST');
   }
 
   async submitVote(gameId, playerName, answer) {

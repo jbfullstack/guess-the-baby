@@ -14,20 +14,21 @@ const AdminPage = () => {
   const [editingPhoto, setEditingPhoto] = useState(null);
   const [editName, setEditName] = useState('');
   
-  // Mock photos from database (in real app, this comes from GitHub)
-  const [allPhotos] = useState([
-    { id: '1', url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&h=300&fit=crop', person: 'Alice', uploadedBy: 'Alice' },
-    { id: '2', url: 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=300&h=300&fit=crop', person: 'Bob', uploadedBy: 'Bob' },
-    { id: '3', url: 'https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=300&h=300&fit=crop', person: 'Charlie', uploadedBy: 'Charlie' },
-    { id: '4', url: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&h=300&fit=crop', person: 'Diana', uploadedBy: 'Diana' },
-    { id: '5', url: 'https://images.unsplash.com/photo-1596464716127-f2a82984de30?w=300&h=300&fit=crop', person: 'Alice', uploadedBy: 'Alice' },
-  ]);
+  // Use real photos from gameState instead of mock data
+  const allPhotos = gameState.photos;
 
   useEffect(() => {
-    // Initialize with default order
-    setPhotoOrder([...allPhotos]);
-    // Select all photos by default
-    setSelectedPhotos(allPhotos.map(photo => photo.id));
+    // Load photos from backend when component mounts
+    actions.refreshPhotos();
+  }, []);
+
+  useEffect(() => {
+    // Initialize with default order when photos are loaded
+    if (allPhotos.length > 0) {
+      setPhotoOrder([...allPhotos]);
+      // Select all photos by default
+      setSelectedPhotos(allPhotos.map(photo => photo.id));
+    }
   }, [allPhotos]);
 
   const togglePhotoSelection = (photoId) => {
@@ -72,10 +73,10 @@ const AdminPage = () => {
   const deletePhoto = async (photoId) => {
     if (window.confirm('Are you sure you want to delete this photo? This action cannot be undone.')) {
       try {
-        // In real app, this would call API to delete from GitHub
-        // await apiService.deletePhoto(photoId);
+        // Call real API to delete from GitHub
+        await actions.deletePhoto(photoId);
         
-        // For now, just remove from local state
+        // Remove from local state
         setPhotoOrder(prev => prev.filter(photo => photo.id !== photoId));
         setSelectedPhotos(prev => prev.filter(id => id !== photoId));
         
@@ -99,10 +100,10 @@ const AdminPage = () => {
     }
 
     try {
-      // In real app, this would call API to update GitHub
-      // await apiService.updatePhotoName(photoId, editName.trim());
+      // Call real API to update GitHub
+      await actions.updatePhoto(photoId, editName.trim());
       
-      // For now, just update local state
+      // Update local state
       setPhotoOrder(prev => prev.map(photo => 
         photo.id === photoId 
           ? { ...photo, person: editName.trim() }

@@ -22,9 +22,12 @@
   "homepage": "https://github.com/jbfullstack/guess-the-baby#readme",
   "description": "",
   "dependencies": {
+    "@octokit/rest": "^22.0.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "formidable": "^3.5.4",
     "framer-motion": "^12.23.10",
     "lucide-react": "^0.528.0",
+    "pusher": "^5.2.0",
     "pusher-js": "^8.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

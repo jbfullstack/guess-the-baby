@@ -1,0 +1,16 @@
+{
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "GITHUB_TOKEN": "@github_token",
+    "GITHUB_REPO_OWNER": "@github_repo_owner", 
+    "GITHUB_REPO_NAME": "@github_repo_name",
+    "PUSHER_APP_ID": "@pusher_app_id",
+    "PUSHER_KEY": "@pusher_key",
+    "PUSHER_SECRET": "@pusher_secret",
+    "PUSHER_CLUSTER": "@pusher_cluster"
+  }
+}
