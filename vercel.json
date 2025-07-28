@@ -1,9 +1,17 @@
 {
+  "version": 2,
   "functions": {
     "api/*.js": {
+      "runtime": "nodejs18.x",
       "maxDuration": 30
     }
   },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ],
   "env": {
     "GITHUB_TOKEN": "@github_token",
     "GITHUB_REPO_OWNER": "@github_repo_owner", 
