@@ -58,10 +58,15 @@ export default async function handler(req, res) {
     const { votesCount } = await VotesRedis.submitVote(currentRound, playerName, answer);
 
     // 3. Check if answer is correct and update score
-    const isCorrect = answer === currentPhoto.person;
-    if (isCorrect) {
-      await ScoresRedis.incrementScore(playerName, 1);
+    // UPDATED: Handle NO_ANSWER case
+    let isCorrect = false;
+    if (answer !== 'NO_ANSWER') {
+      isCorrect = answer === currentPhoto.person;
+      if (isCorrect) {
+        await ScoresRedis.incrementScore(playerName, 1);
+      }
     }
+    // NO_ANSWER doesn't get points but still counts as a vote
 
     // 4. Update player heartbeat
     await PlayersRedis.updateHeartbeat(playerName);
@@ -146,12 +151,13 @@ export default async function handler(req, res) {
 
     res.json({ 
       success: true,
-      message: 'Vote submitted successfully',
+      message: answer === 'NO_ANSWER' ? 'Timer expiry processed' : 'Vote submitted successfully',
       correct: isCorrect,
       allVoted: allPlayersVoted,
       votesCount: votesCount,
       totalPlayers: players.length,
-      responseTime: `${responseTime}ms`
+      responseTime: `${responseTime}ms`,
+      timerExpired: answer === 'NO_ANSWER'
     });
 
   } catch (error) {
@@ -168,6 +174,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 // Helper function to save completed game to GitHub (async)
 async function saveGameToGitHubHistory(gameState, scores) {

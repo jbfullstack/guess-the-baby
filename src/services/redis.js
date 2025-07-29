@@ -310,5 +310,74 @@ export const RedisHealth = {
   }
 };
 
+export const VotesRedis = {
+  // Submit vote
+  async submitVote(round, playerName, answer) {
+    const voteKey = `game:votes:round:${round}`;
+    
+    // Check if player already voted
+    const existingVote = await redis.hget(voteKey, playerName);
+    if (existingVote) {
+      throw new Error('Player already voted this round');
+    }
+
+    // Submit vote and increment count atomically
+    const pipeline = redis.pipeline();
+    
+    // CRITICAL FIX: Store vote properly
+    pipeline.hset(voteKey, playerName, answer);
+    pipeline.hincrby(voteKey, '_votes_count', 1); // Use underscore prefix to avoid conflicts
+    pipeline.expire(voteKey, 1800); // 30 minutes TTL
+    
+    const results = await pipeline.exec();
+    const votesCount = results[1].result;
+    
+    return { votesCount, answer };
+  },
+
+  // Get votes for a round
+  async getRoundVotes(round) {
+    const voteKey = `game:votes:round:${round}`;
+    const allData = await redis.hgetall(voteKey);
+    
+    if (!allData) return { votes: {}, votesCount: 0, totalPlayers: 0 };
+    
+    // CRITICAL FIX: Separate metadata from actual votes
+    const votes = {};
+    let votesCount = 0;
+    let totalPlayers = 0;
+    
+    Object.entries(allData).forEach(([key, value]) => {
+      if (key === '_votes_count') {
+        votesCount = parseInt(value) || 0;
+      } else if (key === '_total_players') {
+        totalPlayers = parseInt(value) || 0;
+      } else if (key.startsWith('_')) {
+        // Skip other metadata fields
+        return;
+      } else {
+        // This is an actual vote
+        votes[key] = value;
+      }
+    });
+    
+    console.log(`[VOTES DEBUG] Round ${round}:`, { votes, votesCount, totalPlayers });
+    
+    return { votes, votesCount, totalPlayers };
+  },
+
+  // Clear votes for a round
+  async clearRoundVotes(round) {
+    await redis.del(`game:votes:round:${round}`);
+  },
+
+  // Set total players for vote counting
+  async setTotalPlayers(round, totalPlayers) {
+    const voteKey = `game:votes:round:${round}`;
+    await redis.hset(voteKey, '_total_players', totalPlayers); // Use underscore prefix
+    await redis.expire(voteKey, 1800);
+  }
+};
+
 // Export default Redis client for custom operations
 export default redis;
