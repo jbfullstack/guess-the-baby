@@ -246,10 +246,21 @@ export const VotesRedis = {
     
     if (!votes) return { votes: {}, votesCount: 0 };
     
-    const { votes_count, ...playerVotes } = votes;
+    // Extract metadata vs actual votes
+    const { votes_count, total_players, ...playerVotes } = votes;
+    
+    // Clean up any malformed data
+    const cleanVotes = {};
+    Object.entries(playerVotes).forEach(([player, answer]) => {
+      if (typeof player === 'string' && typeof answer === 'string' && player.length > 1) {
+        cleanVotes[player] = answer;
+      }
+    });
+    
     return {
-      votes: playerVotes,
-      votesCount: parseInt(votes_count) || 0
+      votes: cleanVotes,
+      votesCount: parseInt(votes_count) || 0,
+      totalPlayers: parseInt(total_players) || 0
     };
   },
 

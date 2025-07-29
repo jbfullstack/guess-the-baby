@@ -224,6 +224,17 @@ const AdminPage = () => {
     { player: 'Charlie', answer: 'Alice', correct: false },
   ];
 
+  // Get real votes from gameState
+  const currentVotes = gameState.votes || {};
+  const votesArray = Object.entries(currentVotes).map(([player, answer]) => ({
+    player,
+    answer,
+    correct: false // We don't know the correct answer on admin side during voting
+  }));
+
+  // Use real votes if available, otherwise show "No votes yet"
+  const displayVotes = votesArray.length > 0 ? votesArray : [];
+
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -424,19 +435,31 @@ const AdminPage = () => {
                   
                   {showVotes && (
                     <div className="bg-white/5 rounded-lg p-3 space-y-1">
-                      {mockVotes.map((vote, index) => (
-                        <div key={index} className="flex items-center justify-between text-sm">
-                          <span className="text-white">{vote.player}</span>
-                          <div className="flex items-center space-x-1">
-                            <span className="text-gray-300">{vote.answer}</span>
-                            {vote.correct ? (
-                              <Check className="w-3 h-3 text-green-400" />
-                            ) : (
-                              <X className="w-3 h-3 text-red-400" />
-                            )}
+                      {displayVotes.length > 0 ? (
+                        displayVotes.map((vote, index) => (
+                          <div key={index} className="flex items-center justify-between text-sm">
+                            <span className="text-white">{vote.player}</span>
+                            <div className="flex items-center space-x-1">
+                              <span className="text-gray-300">{vote.answer}</span>
+                              {/* We don't show correct/incorrect during voting - only after round ends */}
+                              <div className="w-2 h-2 bg-blue-400 rounded-full" title="Vote received"></div>
+                            </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-2">
+                          <p className="text-gray-400 text-sm">No votes yet this round</p>
                         </div>
-                      ))}
+                      )}
+                      
+                      {/* Vote summary */}
+                      {gameState.players.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-white/20">
+                          <p className="text-xs text-gray-400 text-center">
+                            {displayVotes.length} / {gameState.players.length} players voted
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
