@@ -171,111 +171,113 @@ export default async function handler(req, res) {
       round: currentRound
     });
 
-    // 8. If all players voted, handle round completion - FIXED LOGIC
+    // 8. If all players voted, handle round completion - SERVERLESS COMPATIBLE
     if (allPlayersVoted) {
       console.log(`[VOTE] 🎯 All ${totalPlayers} players voted! Processing round completion...`);
       
       const scores = await ScoresRedis.getScores();
       
-      // Show round results
+      // Show round results with 3-second delay timer on client side
       await pusher.trigger('baby-game', 'round-ended', {
         round: currentRound,
         correctAnswer: currentPhoto.person,
         votes: votes,
         scores: scores,
-        photo: currentPhoto
+        photo: currentPhoto,
+        nextRoundDelay: 3000 // Tell clients to wait 3 seconds
       });
 
       console.log(`[VOTE] 📤 Round results sent via Pusher`);
 
-      // FIX 3: Wait 3 seconds then move to next photo or end game - IMPROVED
-      setTimeout(async () => {
-        try {
-          console.log(`[VOTE] 🕐 3 seconds passed, checking if game should continue...`);
-          console.log(`[VOTE] Current round: ${currentRound}, Total photos: ${selectedPhotos.length}`);
+      // IMMEDIATE PROGRESSION (no setTimeout in serverless)
+      try {
+        console.log(`[VOTE] 🚀 Immediate round progression check...`);
+        console.log(`[VOTE] Current round: ${currentRound}, Total photos: ${selectedPhotos.length}`);
+        
+        if (currentRound >= selectedPhotos.length) {
+          console.log(`[VOTE] 🏁 Game finished! Final round: ${currentRound}/${selectedPhotos.length}`);
           
-          if (currentRound >= selectedPhotos.length) {
-            console.log(`[VOTE] 🏁 Game finished! Final round: ${currentRound}/${selectedPhotos.length}`);
-            
-            // Game finished - save to GitHub history (async)
-            saveGameToGitHubHistory(gameState, scores).catch(err => 
-              console.error('[VOTE] History save failed:', err)
-            );
-            
-            // Update game state to finished
-            await GameStateRedis.updateGameField('gameMode', 'finished');
+          // Game finished - save to GitHub history (async)
+          saveGameToGitHubHistory(gameState, scores).catch(err => 
+            console.error('[VOTE] History save failed:', err)
+          );
+          
+          // Update game state to finished
+          await GameStateRedis.updateGameField('gameMode', 'finished');
 
-            const winner = Object.entries(scores)
-              .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
+          const winner = Object.entries(scores)
+            .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
 
-            await pusher.trigger('baby-game', 'game-ended', {
-              finalScores: scores,
-              winner: winner,
-              totalRounds: selectedPhotos.length
-            });
-            
-            console.log(`[VOTE] 🏆 Game ended. Winner: ${winner}`);
-          } else {
-            // FIX 4: Next photo logic - IMPROVED
-            const nextRound = currentRound + 1;
-            const nextPhoto = selectedPhotos[nextRound - 1];
-            
-            if (!nextPhoto) {
-              console.error(`[VOTE] ❌ No photo found for next round ${nextRound}`);
-              return;
-            }
-            
-            console.log(`[VOTE] ➡️ Moving to round ${nextRound}: ${nextPhoto.person}`);
-            
-            // Update game state - FIXED: Ensure proper updates
-            await GameStateRedis.updateGameField('currentRound', nextRound.toString());
-            await GameStateRedis.updateGameField('currentPhoto', JSON.stringify({
+          // Send game end event with delay instruction
+          await pusher.trigger('baby-game', 'game-ended', {
+            finalScores: scores,
+            winner: winner,
+            totalRounds: selectedPhotos.length,
+            showDelay: 3000 // Tell clients to show results after 3 seconds
+          });
+          
+          console.log(`[VOTE] 🏆 Game ended. Winner: ${winner}`);
+        } else {
+          // Next photo logic - IMMEDIATE
+          const nextRound = currentRound + 1;
+          const nextPhoto = selectedPhotos[nextRound - 1];
+          
+          if (!nextPhoto) {
+            console.error(`[VOTE] ❌ No photo found for next round ${nextRound}`);
+            throw new Error(`No photo found for round ${nextRound}`);
+          }
+          
+          console.log(`[VOTE] ➡️ Moving to round ${nextRound}: ${nextPhoto.person}`);
+          
+          // Update game state immediately
+          await GameStateRedis.updateGameField('currentRound', nextRound.toString());
+          await GameStateRedis.updateGameField('currentPhoto', JSON.stringify({
+            id: nextPhoto.id,
+            url: nextPhoto.url
+          }));
+          
+          // Clear previous round votes
+          await VotesRedis.clearRoundVotes(currentRound);
+          console.log(`[VOTE] 🧹 Cleared votes for completed round ${currentRound}`);
+          
+          // Get FRESH player count for next round
+          const freshPlayers = await PlayersRedis.getPlayers();
+          const freshPlayerCount = freshPlayers.length;
+          
+          // Set up vote counting for next round
+          await VotesRedis.setTotalPlayers(nextRound, freshPlayerCount);
+          console.log(`[VOTE] 👥 Set total players for round ${nextRound}: ${freshPlayerCount}`);
+
+          // Clean answer order for completed round
+          const roundKey = `round_${currentRound}`;
+          correctAnswerOrder.delete(roundKey);
+          console.log(`[VOTE] 🧹 Cleaned answer order for completed round ${currentRound}`);
+
+          // Trigger next photo with delay instruction
+          await pusher.trigger('baby-game', 'next-photo', {
+            photo: {
               id: nextPhoto.id,
               url: nextPhoto.url
-            }));
-            
-            // Clear previous round votes
-            await VotesRedis.clearRoundVotes(currentRound);
-            console.log(`[VOTE] 🧹 Cleared votes for completed round ${currentRound}`);
-            
-            // FIX 5: Get FRESH player count for next round
-            const freshPlayers = await PlayersRedis.getPlayers();
-            const freshPlayerCount = freshPlayers.length;
-            
-            // Set up vote counting for next round
-            await VotesRedis.setTotalPlayers(nextRound, freshPlayerCount);
-            console.log(`[VOTE] 👥 Set total players for round ${nextRound}: ${freshPlayerCount}`);
-
-            // Nettoyer l'ordre des réponses pour le round terminé
-            const roundKey = `round_${currentRound}`;
-            correctAnswerOrder.delete(roundKey);
-            console.log(`[VOTE] 🧹 Cleaned answer order for completed round ${currentRound}`);
-
-            // FIX 6: Trigger next photo with proper data
-            await pusher.trigger('baby-game', 'next-photo', {
-              photo: {
-                id: nextPhoto.id,
-                url: nextPhoto.url
-              },
-              round: nextRound,
-              totalRounds: selectedPhotos.length,
-              scores: scores,
-              gameMode: 'playing' // Ensure game mode is preserved
-            });
-            
-            console.log(`[VOTE] 📤 Next photo event sent via Pusher for round ${nextRound}`);
-          }
-        } catch (error) {
-          console.error('[VOTE] ❌ Error in round completion:', error);
-          
-          // FIX 7: Emergency fallback - notify admin of error
-          await pusher.trigger('baby-game', 'round-error', {
-            error: error.message,
-            round: currentRound,
-            timestamp: Date.now()
+            },
+            round: nextRound,
+            totalRounds: selectedPhotos.length,
+            scores: scores,
+            gameMode: 'playing',
+            showDelay: 3000 // Tell clients to show next photo after 3 seconds
           });
+          
+          console.log(`[VOTE] 📤 Next photo event sent via Pusher for round ${nextRound}`);
         }
-      }, 3000);
+      } catch (error) {
+        console.error('[VOTE] ❌ Error in round completion:', error);
+        
+        // Emergency fallback - notify admin of error
+        await pusher.trigger('baby-game', 'round-error', {
+          error: error.message,
+          round: currentRound,
+          timestamp: Date.now()
+        });
+      }
     } else {
       console.log(`[VOTE] ⏳ Waiting for more votes: ${votesCount}/${totalPlayers}`);
     }

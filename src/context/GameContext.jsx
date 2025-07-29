@@ -221,27 +221,67 @@ export const GameProvider = ({ children }) => {
         });
     });
 
+    // Dans bindPusherEvents function - CLIENT-SIDE DELAY MANAGEMENT
+
+    channel.bind('round-ended', (data) => {
+        console.log('🔄 Round ended:', data);
+        updateGameState({ 
+            scores: data.scores
+        });
+        
+        // Client-side delay before processing next action
+        const delay = data.nextRoundDelay || 3000;
+        console.log(`🔄 ⏱️ Waiting ${delay}ms before next action...`);
+    });
+
     channel.bind('next-photo', (data) => {
-        console.log('📸 Next photo:', data);
-        updateGameState({
+        console.log('📸 Next photo received:', data);
+        
+        // Function to apply the next photo update
+        const applyNextPhoto = () => {
+            console.log('📸 ✅ Applying next photo update...');
+            updateGameState({
             currentPhoto: data.photo,
             currentRound: data.round,
             selectedAnswer: null,        // RESET voting state
             hasVoted: false,            // RESET voting state  
             votes: {},                  // CLEAR votes for new round
             scores: data.scores,        // UPDATE scores
-            gameMode: data.gameMode || 'playing' // Ensure still playing
-        });
-
-        console.log(`📸 ✅ Updated to round ${data.round}, photo: ${data.photo.id}`);
+            gameMode: data.gameMode || 'playing'
+            });
+            console.log(`📸 ✅ Updated to round ${data.round}, photo: ${data.photo.id}`);
+        };
+        
+        // Apply delay if specified, otherwise immediate
+        const delay = data.showDelay || 0;
+        if (delay > 0) {
+            console.log(`📸 ⏱️ Waiting ${delay}ms before showing next photo...`);
+            setTimeout(applyNextPhoto, delay);
+        } else {
+            applyNextPhoto();
+        }
     });
 
     channel.bind('game-ended', (data) => {
         console.log('🏁 Game ended:', data);
-        updateGameState({
-        gameMode: 'finished',
-        scores: data.finalScores
-        });
+        
+        // Function to apply game end
+        const applyGameEnd = () => {
+            console.log('🏁 ✅ Applying game end...');
+            updateGameState({
+            gameMode: 'finished',
+            scores: data.finalScores
+            });
+        };
+        
+        // Apply delay if specified, otherwise immediate
+        const delay = data.showDelay || 0;
+        if (delay > 0) {
+            console.log(`🏁 ⏱️ Waiting ${delay}ms before showing game end...`);
+            setTimeout(applyGameEnd, delay);
+        } else {
+            applyGameEnd();
+        }
     });
 
     channel.bind('vote-update', (data) => {
@@ -252,15 +292,18 @@ export const GameProvider = ({ children }) => {
     channel.bind('round-ended', (data) => {
         console.log('🔄 Round ended:', data);
         updateGameState({ 
-        scores: data.scores
+            scores: data.scores
         });
+        
+        // Client-side delay before processing next action
+        const delay = data.nextRoundDelay || 3000;
+        console.log(`🔄 ⏱️ Waiting ${delay}ms before next action...`);
     });
 
     channel.bind('round-error', (data) => {
         console.error('🚨 Round error received:', data);
         alert(`Game error: ${data.error}\nRound: ${data.round}\nPlease refresh or contact admin.`);
     });
-
     channel.bind('sync-state', (data) => {
         console.log('🔄 Syncing state:', data);
         // Only apply if this is for us (or if no target specified)
