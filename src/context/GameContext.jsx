@@ -224,12 +224,16 @@ export const GameProvider = ({ children }) => {
     channel.bind('next-photo', (data) => {
         console.log('📸 Next photo:', data);
         updateGameState({
-        currentPhoto: data.photo,
-        currentRound: data.round,
-        selectedAnswer: null,
-        votes: [],
-        scores: data.scores
+            currentPhoto: data.photo,
+            currentRound: data.round,
+            selectedAnswer: null,        // RESET voting state
+            hasVoted: false,            // RESET voting state  
+            votes: {},                  // CLEAR votes for new round
+            scores: data.scores,        // UPDATE scores
+            gameMode: data.gameMode || 'playing' // Ensure still playing
         });
+
+        console.log(`📸 ✅ Updated to round ${data.round}, photo: ${data.photo.id}`);
     });
 
     channel.bind('game-ended', (data) => {
@@ -250,6 +254,11 @@ export const GameProvider = ({ children }) => {
         updateGameState({ 
         scores: data.scores
         });
+    });
+
+    channel.bind('round-error', (data) => {
+        console.error('🚨 Round error received:', data);
+        alert(`Game error: ${data.error}\nRound: ${data.round}\nPlease refresh or contact admin.`);
     });
 
     channel.bind('sync-state', (data) => {

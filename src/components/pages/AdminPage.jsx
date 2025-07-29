@@ -793,7 +793,6 @@ const AdminPage = () => {
                   ) : (
                     <div>
                       <p className="text-white text-xs font-medium">{photo.person}</p>
-                      <p className="text-gray-300 text-xs">by {photo.uploadedBy}</p>
                     </div>
                   )}
                 </div>
