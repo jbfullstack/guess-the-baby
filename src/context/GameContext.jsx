@@ -55,7 +55,11 @@ const gameStateReducer = (state, action) => {
         selectedAnswer: null,
         hasVoted: false,
         votes: [],
-        currentRound: 0
+        currentRound: 0,
+        players: [],
+        scores: {},
+        gameId: null,
+        hasJoined: false
       };
 
     case 'RESTORE_STATE':
@@ -242,6 +246,31 @@ export const GameProvider = ({ children }) => {
         scores: data.scores
       });
     });
+
+    channel.bind('sync-state', (data) => {
+      console.log('🔄 Syncing state:', data);
+      // Only apply if this is for us (or if no target specified)
+      if (!data.targetPlayer || data.targetPlayer === state.playerName) {
+        updateGameState(data.gameState);
+      }
+    });
+
+    channel.bind('game-reset', (data) => {
+      console.log('🔄 Game reset:', data);
+      dispatch({ type: 'RESET_GAME' });
+      // Optionally show a message to user
+      if (data.message) {
+        console.log('Game reset:', data.message);
+      }
+    });
+
+    channel.bind('player-left', (data) => {
+      console.log('🚪 Player left:', data);
+      updateGameState({
+        players: data.remainingPlayers,
+        scores: data.scores
+      });
+    });
   };
 
   const loadPhotos = async () => {
@@ -346,7 +375,10 @@ export const GameProvider = ({ children }) => {
         updateGameState({
           hasJoined: true,
           playerName,
-          gameId: result.gameId
+          gameId: result.gameId,
+          gameMode: result.gameMode,
+          players: result.players || state.players,
+          scores: result.scores || state.scores
         });
 
         return result;
@@ -394,6 +426,71 @@ export const GameProvider = ({ children }) => {
 
     // Recovery
     recoverState: recoverGameState,
+
+    // Game reset
+    resetGame: async (resetType = 'soft') => {
+      try {
+        const result = await apiService.resetGame(resetType);
+        return result;
+      } catch (error) {
+        console.error('Failed to reset game:', error);
+        throw error;
+      }
+    },
+
+    // Leave game (for players)
+    leaveGame: async (playerName) => {
+      try {
+        const response = await fetch('/api/reset-game-state-redis', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'removePlayer',
+            playerName: playerName
+          }),
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          // Update local state
+          updateGameState({ 
+            hasJoined: false,
+            playerName: '',
+            selectedAnswer: null
+          });
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('Failed to leave game:', error);
+        throw error;
+      }
+    },
+
+    // Remove player (for admin)
+    removePlayer: async (playerName) => {
+      try {
+        const response = await fetch('/api/reset-game-state-redis', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'removePlayer',
+            playerName: playerName
+          }),
+        });
+
+        const result = await response.json();
+        return result;
+      } catch (error) {
+        console.error('Failed to remove player:', error);
+        throw error;
+      }
+    },
 
     // State updates
     updateGameState

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Timer, Crown, ArrowRight } from 'lucide-react';
+import { Users, Timer, Crown, ArrowRight, X, Play, Trophy } from 'lucide-react';
 import { useGame } from '../../hooks/useGame';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
@@ -35,6 +35,39 @@ const GamePage = () => {
       }
     }
   };
+
+  const handleLeaveGame = async () => {
+    if (window.confirm('Are you sure you want to leave the game?')) {
+        try {
+        // Show loading state
+        console.log('Leaving game...');
+        
+        await actions.leaveGame(gameState.playerName);
+        
+        // Navigate back to home
+        actions.setView('home');
+        
+        } catch (error) {
+        console.error('Failed to leave game:', error);
+        
+        // Show error but still allow local fallback
+        const shouldContinue = window.confirm(
+            'Failed to notify other players, but you can still leave locally. Continue?'
+        );
+        
+        if (shouldContinue) {
+            // Fallback to local state update
+            actions.updateGameState({ 
+            hasJoined: false,
+            playerName: '',
+            selectedAnswer: null 
+            });
+            actions.setView('home');
+        }
+        }
+    }
+    };
+
 
   // Join Game Screen
   if (!gameState.hasJoined) {
@@ -80,132 +113,160 @@ const GamePage = () => {
 
   // Waiting Room
   if (gameState.gameMode === 'waiting') {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="max-w-md w-full text-center">
-          <div className="mb-6">
-            <Timer className="w-16 h-16 mx-auto mb-4 text-purple-400 animate-pulse" />
-            <h2 className="text-2xl font-bold text-white mb-2">Waiting for Game to Start</h2>
-            <p className="text-gray-300">The admin will start the game soon...</p>
-          </div>
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="max-w-md w-full text-center">
+        <div className="mb-6">
+          <Timer className="w-16 h-16 mx-auto mb-4 text-purple-400 animate-pulse" />
+          <h2 className="text-2xl font-bold text-white mb-2">Waiting for Game to Start</h2>
+          <p className="text-gray-300">The admin will start the game soon...</p>
+        </div>
+        
+        <div className="bg-white/5 rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold text-white mb-3 flex items-center justify-center space-x-2">
+            <Users className="w-5 h-5" />
+            <span>Players Joined ({gameState.players.length})</span>
+          </h3>
           
-          <div className="bg-white/5 rounded-lg p-4 mb-6">
-            <h3 className="text-lg font-semibold text-white mb-3">
-              Players Joined ({gameState.players.length})
-            </h3>
-            
-            {gameState.players.length > 0 ? (
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {gameState.players.map((player, index) => (
-                  <div 
-                    key={index} 
-                    className="flex items-center justify-between bg-white/5 rounded-lg p-2"
-                  >
+          {gameState.players.length > 0 ? (
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {gameState.players.map((player, index) => (
+                <div 
+                  key={player.name || index} 
+                  className="flex items-center justify-between bg-white/5 rounded-lg p-2"
+                >
+                  <div className="flex items-center space-x-2">
+                    <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">
+                      {(player.name || player).charAt(0).toUpperCase()}
+                    </div>
                     <span className="text-white font-medium">
                       {player.name || player}
-                      {player.name === gameState.playerName && (
-                        <span className="text-purple-400 ml-2">(You)</span>
+                      {(player.name || player) === gameState.playerName && (
+                        <span className="text-purple-400 ml-2 text-sm">(You)</span>
                       )}
                     </span>
-                    <span className="text-xs text-gray-400">Ready</span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400">No players yet...</p>
-            )}
-          </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs text-gray-400">Ready</span>
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-400">No players yet...</p>
+          )}
+        </div>
 
+        {/* Leave Game Button with confirmation */}
+        <div className="space-y-3">
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+            <p className="text-blue-400 text-sm">
+              💡 You can leave at any time. Other players and the admin will be notified.
+            </p>
+          </div>
+          
           <Button 
             variant="secondary" 
-            onClick={() => {
-              actions.updateGameState({ hasJoined: false });
-              actions.setView('home');
-            }}
+            onClick={handleLeaveGame}
+            className="w-full"
           >
+            <X className="w-4 h-4 mr-2" />
             Leave Game
           </Button>
-        </Card>
-      </div>
-    );
-  }
+        </div>
+      </Card>
+    </div>
+  );
+}
 
   // Game Finished
   if (gameState.gameMode === 'finished' || gameResult) {
     const winner = gameResult?.winner || 'Unknown';
     const finalScores = gameResult?.finalScores || gameState.scores || {};
     const sortedPlayers = Object.entries(finalScores)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 5); // Top 5
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5); // Top 5
 
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="max-w-md w-full text-center">
-          <Crown className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
-          <h2 className="text-2xl font-bold text-white mb-2">Game Over!</h2>
-          
-          <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-lg p-4 mb-6 border border-yellow-500/30">
+            <Crown className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
+            <h2 className="text-2xl font-bold text-white mb-2">Game Over!</h2>
+            
+            <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 rounded-lg p-4 mb-6 border border-yellow-500/30">
             <h3 className="text-xl font-bold text-yellow-400 mb-1">🏆 Winner</h3>
             <p className="text-2xl font-bold text-white">{winner}</p>
-          </div>
+            </div>
 
-          <div className="bg-white/5 rounded-lg p-4 mb-6">
+            <div className="bg-white/5 rounded-lg p-4 mb-6">
             <h3 className="text-lg font-semibold text-white mb-3">Final Scores</h3>
             <div className="space-y-2">
-              {sortedPlayers.map(([playerName, score], index) => (
+                {sortedPlayers.map(([playerName, score], index) => (
                 <div 
-                  key={playerName}
-                  className={`flex items-center justify-between p-2 rounded ${
+                    key={playerName}
+                    className={`flex items-center justify-between p-2 rounded ${
                     index === 0 ? 'bg-yellow-500/20 border border-yellow-500/30' : 'bg-white/5'
-                  }`}
+                    }`}
                 >
-                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2">
                     <span className="text-sm font-bold text-gray-400">#{index + 1}</span>
+                    <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">
+                        {playerName.charAt(0).toUpperCase()}
+                    </div>
                     <span className={`font-medium ${
-                      index === 0 ? 'text-yellow-400' : 'text-white'
+                        index === 0 ? 'text-yellow-400' : 'text-white'
                     }`}>
-                      {playerName}
-                      {playerName === gameState.playerName && (
-                        <span className="text-purple-400 ml-1">(You)</span>
-                      )}
+                        {playerName}
+                        {playerName === gameState.playerName && (
+                        <span className="text-purple-400 ml-1 text-sm">(You)</span>
+                        )}
                     </span>
-                  </div>
-                  <span className={`font-bold ${
+                    </div>
+                    <span className={`font-bold ${
                     index === 0 ? 'text-yellow-400' : 'text-white'
-                  }`}>
+                    }`}>
                     {score} pts
-                  </span>
+                    </span>
                 </div>
-              ))}
+                ))}
             </div>
-          </div>
+            </div>
 
-          <div className="flex space-x-3">
+            {/* Action buttons with proper Leave Game */}
+            <div className="space-y-3">
+            <div className="flex space-x-3">
+                <Button 
+                variant="secondary"
+                onClick={() => actions.setView('history')}
+                className="flex-1"
+                >
+                <Trophy className="w-4 h-4 mr-2" />
+                View History
+                </Button>
+                <Button 
+                onClick={handleLeaveGame}
+                className="flex-1"
+                >
+                <Play className="w-4 h-4 mr-2" />
+                Play Again
+                </Button>
+            </div>
+            
+            {/* Additional leave option */}
             <Button 
-              variant="secondary"
-              onClick={() => actions.setView('history')}
-              className="flex-1"
+                variant="outline" 
+                onClick={handleLeaveGame}
+                className="w-full"
             >
-              View History
+                <X className="w-4 h-4 mr-2" />
+                Leave Game
             </Button>
-            <Button 
-              onClick={() => {
-                actions.updateGameState({ 
-                  hasJoined: false, 
-                  gameMode: 'waiting',
-                  selectedAnswer: null 
-                });
-                actions.setView('home');
-              }}
-              className="flex-1"
-            >
-              Play Again
-            </Button>
-          </div>
+            </div>
         </Card>
-      </div>
+        </div>
     );
-  }
+    }
 
   // Active Game
   return (

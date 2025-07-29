@@ -17,8 +17,51 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    const { resetType = 'hard' } = req.body;
+    const { resetType = 'hard', playerName, action } = req.body;
 
+    // REMOVE SINGLE PLAYER
+    if (action === 'removePlayer' && playerName) {
+      console.log(`🚪 Removing player: ${playerName}`);
+
+      try {
+        // Remove player from Redis
+        const updatedPlayers = await PlayersRedis.removePlayer(playerName);
+        
+        // Remove player score
+        await ScoresRedis.setScore(playerName, undefined); // This will remove the key
+        
+        // Get all remaining scores
+        const allScores = await ScoresRedis.getScores();
+
+        // Notify all clients that player left
+        await pusher.trigger('baby-game', 'player-left', {
+          playerName: playerName,
+          remainingPlayers: updatedPlayers,
+          totalPlayers: updatedPlayers.length,
+          scores: allScores,
+          timestamp: Date.now()
+        });
+
+        const responseTime = Date.now() - startTime;
+
+        return res.json({ 
+          success: true,
+          action: 'removePlayer',
+          message: `Player ${playerName} removed successfully`,
+          playerName: playerName,
+          remainingPlayers: updatedPlayers.length,
+          responseTime: `${responseTime}ms`
+        });
+
+      } catch (error) {
+        return res.status(500).json({
+          error: `Failed to remove player: ${error.message}`,
+          responseTime: `${Date.now() - startTime}ms`
+        });
+      }
+    }
+
+    // FULL GAME RESET (original functionality)
     console.log(`🔄 Resetting game (${resetType})...`);
 
     // Reset all Redis data (FAST & ATOMIC!)
@@ -28,14 +71,16 @@ export default async function handler(req, res) {
     if (resetType === 'hard') {
       // Clear everything including players
       await Promise.all([
-        PlayersRedis.removePlayer('*'), // This will be handled by the reset
+        PlayersRedis.clearAllPlayers(),
         ScoresRedis.resetScores()
       ]);
       message = 'Game reset completely - all players and scores cleared';
     } else {
       // Soft reset - keep players but reset game state
       const players = await PlayersRedis.getPlayers();
-      await ScoresRedis.initializeScores(players.map(p => p.name));
+      if (players.length > 0) {
+        await ScoresRedis.initializeScores(players.map(p => p.name));
+      }
       message = 'Game reset - players kept but scores reset';
     }
 
@@ -52,6 +97,7 @@ export default async function handler(req, res) {
 
     res.json({ 
       success: true,
+      action: 'resetGame',
       message: `Game reset successfully (${resetType})`,
       resetType,
       responseTime: `${responseTime}ms`,
@@ -61,7 +107,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Reset game error:', error);
+    console.error('Reset/Remove operation error:', error);
     res.status(500).json({ 
       error: error.message,
       responseTime: `${Date.now() - startTime}ms`
