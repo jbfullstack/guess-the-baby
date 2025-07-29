@@ -215,34 +215,49 @@ export const ScoresRedis = {
   }
 };
 
-// Votes management - VERSION A (CORRECTE)
 export const VotesRedis = {
   // Submit vote
   async submitVote(round, playerName, answer) {
     const voteKey = `game:votes:round:${round}`;
     
     // Check if player already voted
-    const existingVote = await redis.hget(voteKey, playerName);
+    const existingVote = await redis.hget(voteKey, `player:${playerName}`);
     if (existingVote) {
       throw new Error('Player already voted this round');
     }
 
     console.log(`[VOTES] Submitting vote: ${playerName} -> ${answer} for round ${round}`);
 
-    // Submit vote and increment count atomically
-    const pipeline = redis.pipeline();
-    
-    // Store player vote with EXPLICIT string keys
-    pipeline.hset(voteKey, `player:${playerName}`, answer);
-    pipeline.hincrby(voteKey, 'meta:votes_count', 1);
-    pipeline.expire(voteKey, 1800); // 30 minutes TTL
-    
-    const results = await pipeline.exec();
-    const votesCount = results[1].result;
-    
-    console.log(`[VOTES] Vote stored successfully. Count: ${votesCount}`);
-    
-    return { votesCount, answer };
+    try {
+      // ROBUST APPROACH: Use pipeline with explicit operations
+      const pipeline = redis.pipeline();
+      
+      // 1. Store the vote
+      pipeline.hset(voteKey, `player:${playerName}`, answer);
+      
+      // 2. Initialize or increment vote count
+      // First check if meta exists, if not set to 0, then increment
+      pipeline.hsetnx(voteKey, 'meta:votes_count', '0');
+      pipeline.hincrby(voteKey, 'meta:votes_count', 1);
+      
+      // 3. Set expiry
+      pipeline.expire(voteKey, 1800);
+      
+      const results = await pipeline.exec();
+      
+      // Get the final vote count
+      const finalCount = await redis.hget(voteKey, 'meta:votes_count');
+      const votesCount = parseInt(finalCount) || 1; // Fallback to 1 if still issues
+      
+      console.log(`[VOTES] Vote stored successfully. Count: ${votesCount}`);
+      console.log(`[VOTES] Pipeline results:`, results.map(r => r.result));
+      
+      return { votesCount, answer };
+      
+    } catch (error) {
+      console.error(`[VOTES] Error submitting vote:`, error);
+      throw error;
+    }
   },
 
   // Get votes for a round
@@ -259,10 +274,11 @@ export const VotesRedis = {
         return { votes: {}, votesCount: 0, totalPlayers: 0 };
       }
       
-      // Separate votes from metadata with EXPLICIT prefixes
+      // ROBUST parsing with cleanup of legacy data
       const votes = {};
       let votesCount = 0;
       let totalPlayers = 0;
+      const legacyKeys = [];
       
       Object.entries(allData).forEach(([key, value]) => {
         console.log(`[VOTES] Processing key: "${key}" = "${value}" (type: ${typeof value})`);
@@ -279,16 +295,37 @@ export const VotesRedis = {
           // Skip other metadata
           console.log(`[VOTES] Skipping metadata: ${key}`);
         } else {
-          // Legacy format - try to handle old votes
-          console.warn(`[VOTES] Legacy vote format detected: ${key} = ${value}`);
-          // Only add if it looks like a real player name (not a character index)
-          if (isNaN(key) && key.length > 1) {
+          // Legacy or corrupted data
+          console.warn(`[VOTES] Legacy/corrupted vote format detected: ${key} = ${value}`);
+          legacyKeys.push(key);
+          
+          // Try to salvage if it looks like a real player name
+          if (isNaN(key) && key.length > 1 && key.length < 20 && !key.includes(':')) {
+            console.log(`[VOTES] Salvaging as player vote: ${key} -> ${value}`);
             votes[key] = value;
           }
         }
       });
       
-      console.log(`[VOTES] Parsed votes for round ${round}:`, { votes, votesCount, totalPlayers });
+      // Clean up legacy data
+      if (legacyKeys.length > 0) {
+        console.log(`[VOTES] Cleaning up ${legacyKeys.length} legacy keys:`, legacyKeys);
+        const cleanupPipeline = redis.pipeline();
+        legacyKeys.forEach(key => {
+          cleanupPipeline.hdel(voteKey, key);
+        });
+        await cleanupPipeline.exec();
+      }
+      
+      // If vote count is missing but we have votes, calculate it
+      if (votesCount === 0 && Object.keys(votes).length > 0) {
+        votesCount = Object.keys(votes).length;
+        console.log(`[VOTES] Recalculated vote count: ${votesCount}`);
+        // Update the meta count
+        await redis.hset(voteKey, 'meta:votes_count', votesCount);
+      }
+      
+      console.log(`[VOTES] Final parsed votes for round ${round}:`, { votes, votesCount, totalPlayers });
       
       return { votes, votesCount, totalPlayers };
       
@@ -310,6 +347,21 @@ export const VotesRedis = {
     console.log(`[VOTES] Setting total players for round ${round}: ${totalPlayers}`);
     await redis.hset(voteKey, 'meta:total_players', totalPlayers);
     await redis.expire(voteKey, 1800);
+  },
+
+  // NEW: Force cleanup of corrupted vote data
+  async cleanupCorruptedVotes() {
+    console.log(`[VOTES] Starting cleanup of corrupted vote data...`);
+    const pipeline = redis.pipeline();
+    
+    // Clean all vote rounds
+    for (let i = 1; i <= 20; i++) {
+      pipeline.del(`game:votes:round:${i}`);
+    }
+    
+    await pipeline.exec();
+    console.log(`[VOTES] Cleanup completed`);
+    return { success: true, message: 'Corrupted vote data cleaned' };
   }
 };
 

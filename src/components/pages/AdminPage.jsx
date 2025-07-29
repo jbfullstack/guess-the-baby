@@ -3,6 +3,7 @@ import { Play, Settings, Users, Image, Check, X, Shuffle, Eye, EyeOff, Edit3, Tr
 import { useGame } from '../../hooks/useGame';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
+import Pusher from 'pusher-js';
 
 const AdminPage = () => {
   const { gameState, actions } = useGame();
@@ -13,6 +14,11 @@ const AdminPage = () => {
   const [photoOrder, setPhotoOrder] = useState([]);
   const [editingPhoto, setEditingPhoto] = useState(null);
   const [editName, setEditName] = useState('');
+
+const [liveVotes, setLiveVotes] = useState({});
+  const [liveVoteCount, setLiveVoteCount] = useState(0);
+  const [liveTotalPlayers, setLiveTotalPlayers] = useState(0);
+
   
   // Use real photos from gameState instead of mock data
   const allPhotos = gameState.photos;
@@ -30,6 +36,70 @@ const AdminPage = () => {
       setSelectedPhotos(allPhotos.map(photo => photo.id));
     }
   }, [allPhotos]);
+
+   useEffect(() => {
+    let pusher = null;
+    let channel = null;
+
+    const setupAdminPusher = () => {
+      try {
+        console.log('[ADMIN] Setting up Pusher connection...');
+        
+        pusher = new Pusher('c9eb0b76bcbe61c6a397', {
+          cluster: 'eu',
+          encrypted: true
+        });
+
+        channel = pusher.subscribe('baby-game');
+        
+        // Listen for vote updates
+        channel.bind('vote-update', (data) => {
+          console.log('[ADMIN] 🗳️ Vote update received:', data);
+          setLiveVotes(data.votes || {});
+          setLiveVoteCount(data.votesCount || 0);
+          setLiveTotalPlayers(data.totalPlayers || 0);
+          
+          // Update shuffle message pour feedback visuel
+          setShuffleMessage(`📊 Live votes: ${data.votesCount || 0}/${data.totalPlayers || 0}`);
+          setTimeout(() => setShuffleMessage(''), 2000);
+        });
+
+        // Listen for round ended
+        channel.bind('round-ended', (data) => {
+          console.log('[ADMIN] 🔄 Round ended:', data);
+          // Clear votes for next round
+          setLiveVotes({});
+          setLiveVoteCount(0);
+        });
+
+        // Listen for game reset
+        channel.bind('game-reset', (data) => {
+          console.log('[ADMIN] 🔄 Game reset:', data);
+          setLiveVotes({});
+          setLiveVoteCount(0);
+          setLiveTotalPlayers(0);
+        });
+
+        console.log('[ADMIN] ✅ Pusher events bound successfully');
+        
+      } catch (error) {
+        console.error('[ADMIN] ❌ Failed to setup Pusher:', error);
+      }
+    };
+
+    setupAdminPusher();
+
+    // Cleanup
+    return () => {
+      if (channel) {
+        channel.unbind_all();
+        pusher.unsubscribe('baby-game');
+      }
+      if (pusher) {
+        pusher.disconnect();
+      }
+    };
+  }, []);
 
   // PLAYER MANAGEMENT FUNCTIONS
   const removePlayer = async (playerName) => {
@@ -218,26 +288,28 @@ const AdminPage = () => {
     }
   };
 
-  const cleanupCorruptedVotes = async () => {
+   const cleanupCorruptedVotes = async () => {
     if (window.confirm('🧹 Clean corrupted vote data?\n\nThis will clear all current votes but keep players and game state.')) {
-        try {
+      try {
         const response = await fetch('/api/redis-cleanup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
         });
         const result = await response.json();
         
         if (result.success) {
-            setShuffleMessage('🧹 Vote data cleaned successfully!');
-            setTimeout(() => setShuffleMessage(''), 3000);
+          setShuffleMessage('🧹 Vote data cleaned successfully!');
+          setLiveVotes({});
+          setLiveVoteCount(0);
+          setTimeout(() => setShuffleMessage(''), 3000);
         } else {
-            alert('❌ Cleanup failed: ' + result.error);
+          alert('❌ Cleanup failed: ' + result.error);
         }
-        } catch (error) {
+      } catch (error) {
         alert('❌ Cleanup failed: ' + error.message);
-        }
+      }
     }
-    };
+  };
 
   // Get real votes from gameState
   const currentVotes = gameState.votes || {};
@@ -248,7 +320,8 @@ const AdminPage = () => {
   }));
 
    const getCurrentVotes = () => {
-    const currentVotes = gameState.votes || {};
+    // Priorité aux votes live, fallback sur gameState
+    const currentVotes = Object.keys(liveVotes).length > 0 ? liveVotes : (gameState.votes || {});
     
     // Convert votes object to array for display
     const votesArray = Object.entries(currentVotes).map(([player, answer]) => ({
@@ -257,14 +330,19 @@ const AdminPage = () => {
       correct: null // We don't know correct answer during voting
     }));
     
-    console.log('[ADMIN] Current votes:', { currentVotes, votesArray });
+    console.log('[ADMIN] Current votes:', { 
+      liveVotes, 
+      gameStateVotes: gameState.votes, 
+      finalVotes: currentVotes, 
+      votesArray 
+    });
     
     return votesArray;
   };
 
   const displayVotes = getCurrentVotes();
-  const totalVotes = displayVotes.length;
-  const totalPlayers = gameState.players.length;
+  const totalVotes = Object.keys(liveVotes).length > 0 ? liveVoteCount : displayVotes.length;
+  const totalPlayers = liveTotalPlayers > 0 ? liveTotalPlayers : gameState.players.length;
 
   return (
     <div className="min-h-screen p-4">
@@ -277,14 +355,20 @@ const AdminPage = () => {
               <h1 className="text-3xl font-bold text-white mb-2">Admin Panel</h1>
               <p className="text-gray-300">Manage your baby photo guessing game</p>
             </div>
-            <Button 
-              variant="secondary" 
-              onClick={() => {
-                actions.authenticateAdmin(false);
-              }}
-            >
-              Exit Admin
-            </Button>
+            <div className="flex space-x-2">
+              {/* Debug info */}
+              <div className="text-xs text-gray-400">
+                Live: {totalVotes}/{totalPlayers}
+              </div>
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  actions.authenticateAdmin(false);
+                }}
+              >
+                Exit Admin
+              </Button>
+            </div>
           </div>
         </Card>
 
@@ -422,136 +506,137 @@ const AdminPage = () => {
 
           {/* Game Control */}
           <Card>
-                <div className="flex items-center space-x-2 mb-4">
-                <Play className="w-5 h-5 text-purple-400" />
-                <h2 className="text-xl font-semibold text-white">Game Control</h2>
-                </div>
-                
-                <div className="space-y-3">
-                <div className="bg-white/5 rounded-lg p-3">
-                    <p className="text-sm text-gray-300 mb-1">Selected Photos</p>
-                    <p className="text-2xl font-bold text-white">{selectedPhotos.length}</p>
-                </div>
-                
-                <Button 
-                    size="lg" 
-                    className="w-full"
-                    onClick={startGame}
-                    disabled={gameState.players.length === 0 || selectedPhotos.length === 0}
-                >
-                    <Play className="w-5 h-5 mr-2" />
-                    Start Game
-                </Button>
-                
-                <Button 
-                    variant="danger" 
-                    size="lg" 
-                    className="w-full"
-                    onClick={resetGame}
-                >
-                    🔄 Reset Game
-                </Button>
+            <div className="flex items-center space-x-2 mb-4">
+              <Play className="w-5 h-5 text-purple-400" />
+              <h2 className="text-xl font-semibold text-white">Game Control</h2>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="bg-white/5 rounded-lg p-3">
+                <p className="text-sm text-gray-300 mb-1">Selected Photos</p>
+                <p className="text-2xl font-bold text-white">{selectedPhotos.length}</p>
+              </div>
+              
+              <Button 
+                size="lg" 
+                className="w-full"
+                onClick={startGame}
+                disabled={gameState.players.length === 0 || selectedPhotos.length === 0}
+              >
+                <Play className="w-5 h-5 mr-2" />
+                Start Game
+              </Button>
+              
+              <Button 
+                variant="danger" 
+                size="lg" 
+                className="w-full"
+                onClick={resetGame}
+              >
+                🔄 Reset Game
+              </Button>
 
-                <Button 
+              {/* NOUVEAU: Cleanup button */}
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="w-full"
+                onClick={cleanupCorruptedVotes}
+              >
+                🧹 Clean Vote Data
+              </Button>
+              
+              {/* LIVE VOTES SECTION - UPDATED */}
+              {gameState.gameMode === 'playing' && (
+                <div className="space-y-2">
+                  <Button 
                     variant="secondary" 
                     size="sm" 
                     className="w-full"
-                    onClick={cleanupCorruptedVotes}
-                    >
-                    🧹 Clean Vote Data
-                </Button>
-                
-                {/* LIVE VOTES SECTION - UPDATED */}
-                {gameState.gameMode === 'playing' && (
-                    <div className="space-y-2">
-                    <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        className="w-full"
-                        onClick={() => setShowVotes(!showVotes)}
-                    >
-                        {showVotes ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
-                        {showVotes ? 'Hide' : 'Show'} Live Votes ({totalVotes}/{totalPlayers})
-                    </Button>
-                    
-                    {showVotes && (
-                        <div className="bg-white/5 rounded-lg p-3 space-y-1">
-                            {/* Debug info */}
-                            <div className="text-xs text-yellow-400 mb-1 font-mono">
-                                 Debug: {JSON.stringify(currentVotes).slice(0, 100)}...
-                            </div>
-                            
-                            {/* Current Round Info */}
-                            <div className="flex items-center justify-between text-xs text-gray-400 mb-2 pb-1 border-b border-white/10">
-                                <span>Round {gameState.currentRound || 1}</span>
-                                <span>{totalVotes}/{totalPlayers} voted</span>
-                            </div>
-                        
-                        {/* Real Votes Display */}
-                        {displayVotes.length > 0 ? (
-                            <div className="space-y-1">
-                            {displayVotes.map((vote, index) => (
-                                <div key={`${vote.player}-${index}`} className="flex items-center justify-between text-sm">
-                                <div className="flex items-center space-x-2">
-                                    <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">
-                                    {vote.player.charAt(0).toUpperCase()}
-                                    </div>
-                                    <span className="text-white font-medium">{vote.player}</span>
+                    onClick={() => setShowVotes(!showVotes)}
+                  >
+                    {showVotes ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+                    {showVotes ? 'Hide' : 'Show'} Live Votes ({totalVotes}/{totalPlayers})
+                  </Button>
+                  
+                  {showVotes && (
+                    <div className="bg-white/5 rounded-lg p-3 space-y-1">
+                      {/* Debug info - NOUVEAU */}
+                      <div className="text-xs text-yellow-400 mb-2 font-mono bg-black/20 p-1 rounded">
+                        Debug: Live={Object.keys(liveVotes).length} | State={Object.keys(gameState.votes || {}).length}
+                      </div>
+                      
+                      {/* Current Round Info */}
+                      <div className="flex items-center justify-between text-xs text-gray-400 mb-2 pb-1 border-b border-white/10">
+                        <span>Round {gameState.currentRound || 1}</span>
+                        <span>{totalVotes}/{totalPlayers} voted</span>
+                      </div>
+                      
+                      {/* Real Votes Display */}
+                      {displayVotes.length > 0 ? (
+                        <div className="space-y-1">
+                          {displayVotes.map((vote, index) => (
+                            <div key={`${vote.player}-${index}`} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center space-x-2">
+                                <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">
+                                  {vote.player.charAt(0).toUpperCase()}
                                 </div>
-                                <div className="flex items-center space-x-2">
-                                    <span className="text-gray-300 font-medium">{vote.answer}</span>
-                                    <div className="w-2 h-2 bg-green-400 rounded-full" title="Vote received"></div>
-                                </div>
-                                </div>
-                            ))}
+                                <span className="text-white font-medium">{vote.player}</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-gray-300 font-medium">{vote.answer}</span>
+                                <div className="w-2 h-2 bg-green-400 rounded-full" title="Vote received"></div>
+                              </div>
                             </div>
-                        ) : (
-                            <div className="text-center py-3">
-                            <p className="text-gray-400 text-sm">No votes yet this round</p>
-                            <p className="text-gray-500 text-xs mt-1">Votes will appear here as players answer</p>
-                            </div>
-                        )}
-                        
-                        {/* Progress Bar */}
-                        {totalPlayers > 0 && (
-                            <div className="mt-3 pt-2 border-t border-white/20">
-                            <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                                <span>Voting Progress</span>
-                                <span>{Math.round((totalVotes / totalPlayers) * 100)}%</span>
-                            </div>
-                            <div className="w-full bg-gray-700 rounded-full h-1.5">
-                                <div 
-                                className="bg-purple-400 h-1.5 rounded-full transition-all duration-300" 
-                                style={{ width: `${(totalVotes / totalPlayers) * 100}%` }}
-                                ></div>
-                            </div>
-                            </div>
-                        )}
-                        
-                        {/* All Voted Indicator */}
-                        {totalVotes >= totalPlayers && totalPlayers > 0 && (
-                            <div className="mt-2 bg-green-500/20 border border-green-500/30 rounded-lg p-2">
-                            <p className="text-green-400 text-xs text-center font-medium">
-                                ✅ All players have voted! Round ending soon...
-                            </p>
-                            </div>
-                        )}
+                          ))}
                         </div>
-                    )}
+                      ) : (
+                        <div className="text-center py-3">
+                          <p className="text-gray-400 text-sm">No votes yet this round</p>
+                          <p className="text-gray-500 text-xs mt-1">Votes will appear here as players answer</p>
+                        </div>
+                      )}
+                      
+                      {/* Progress Bar */}
+                      {totalPlayers > 0 && (
+                        <div className="mt-3 pt-2 border-t border-white/20">
+                          <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                            <span>Voting Progress</span>
+                            <span>{Math.round((totalVotes / totalPlayers) * 100)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-700 rounded-full h-1.5">
+                            <div 
+                              className="bg-purple-400 h-1.5 rounded-full transition-all duration-300" 
+                              style={{ width: `${(totalVotes / totalPlayers) * 100}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* All Voted Indicator */}
+                      {totalVotes >= totalPlayers && totalPlayers > 0 && (
+                        <div className="mt-2 bg-green-500/20 border border-green-500/30 rounded-lg p-2">
+                          <p className="text-green-400 text-xs text-center font-medium">
+                            ✅ All players have voted! Round ending soon...
+                          </p>
+                        </div>
+                      )}
                     </div>
-                )}
-                
-                {/* Game Status */}
-                {gameState.gameMode !== 'waiting' && (
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2">
-                    <p className="text-blue-400 text-xs text-center">
-                        Game Status: {gameState.gameMode === 'playing' ? '🎮 In Progress' : 
-                                    gameState.gameMode === 'finished' ? '🏁 Finished' : '⏸️ Paused'}
-                    </p>
-                    </div>
-                )}
+                  )}
                 </div>
-            </Card>
+              )}
+              
+              {/* Game Status */}
+              {gameState.gameMode !== 'waiting' && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2">
+                  <p className="text-blue-400 text-xs text-center">
+                    Game Status: {gameState.gameMode === 'playing' ? '🎮 In Progress' : 
+                                gameState.gameMode === 'finished' ? '🏁 Finished' : '⏸️ Paused'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
 
             <Button 
                 variant="danger" 
