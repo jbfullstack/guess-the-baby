@@ -215,101 +215,7 @@ export const ScoresRedis = {
   }
 };
 
-// Votes management
-export const VotesRedis = {
-  // Submit vote
-  async submitVote(round, playerName, answer) {
-    const voteKey = `game:votes:round:${round}`;
-    
-    // Check if player already voted
-    const existingVote = await redis.hget(voteKey, playerName);
-    if (existingVote) {
-      throw new Error('Player already voted this round');
-    }
-
-    // Submit vote and increment count atomically
-    const pipeline = redis.pipeline();
-    pipeline.hset(voteKey, playerName, answer);
-    pipeline.hincrby(voteKey, 'votes_count', 1);
-    pipeline.expire(voteKey, 1800); // 30 minutes TTL
-    
-    const results = await pipeline.exec();
-    const votesCount = results[1].result;
-    
-    return { votesCount, answer };
-  },
-
-  // Get votes for a round
-  async getRoundVotes(round) {
-    const voteKey = `game:votes:round:${round}`;
-    const votes = await redis.hgetall(voteKey);
-    
-    if (!votes) return { votes: {}, votesCount: 0 };
-    
-    // Extract metadata vs actual votes
-    const { votes_count, total_players, ...playerVotes } = votes;
-    
-    // Clean up any malformed data
-    const cleanVotes = {};
-    Object.entries(playerVotes).forEach(([player, answer]) => {
-      if (typeof player === 'string' && typeof answer === 'string' && player.length > 1) {
-        cleanVotes[player] = answer;
-      }
-    });
-    
-    return {
-      votes: cleanVotes,
-      votesCount: parseInt(votes_count) || 0,
-      totalPlayers: parseInt(total_players) || 0
-    };
-  },
-
-  // Clear votes for a round
-  async clearRoundVotes(round) {
-    await redis.del(`game:votes:round:${round}`);
-  },
-
-  // Set total players for vote counting
-  async setTotalPlayers(round, totalPlayers) {
-    const voteKey = `game:votes:round:${round}`;
-    await redis.hset(voteKey, 'total_players', totalPlayers);
-    await redis.expire(voteKey, 1800);
-  }
-};
-
-// Real-time events (can replace Pusher)
-export const EventsRedis = {
-  // Publish event
-  async publish(channel, event, data) {
-    const message = JSON.stringify({ event, data, timestamp: Date.now() });
-    await redis.publish(channel, message);
-  },
-
-  // Subscribe to events (for server-side)
-  async subscribe(channel, callback) {
-    // Note: Redis pub/sub requires WebSocket or long polling for browser
-    // For now, we'll keep using Pusher for client notifications
-    console.log('Redis pub/sub setup for server-side events');
-  }
-};
-
-// Health check
-export const RedisHealth = {
-  async ping() {
-    try {
-      const result = await redis.ping();
-      return { status: 'healthy', result, timestamp: Date.now() };
-    } catch (error) {
-      return { status: 'error', error: error.message, timestamp: Date.now() };
-    }
-  },
-
-  async getInfo() {
-    const info = await redis.info();
-    return info;
-  }
-};
-
+// Votes management - VERSION A (CORRECTE)
 export const VotesRedis = {
   // Submit vote
   async submitVote(round, playerName, answer) {
@@ -376,6 +282,39 @@ export const VotesRedis = {
     const voteKey = `game:votes:round:${round}`;
     await redis.hset(voteKey, '_total_players', totalPlayers); // Use underscore prefix
     await redis.expire(voteKey, 1800);
+  }
+};
+
+// Real-time events (can replace Pusher)
+export const EventsRedis = {
+  // Publish event
+  async publish(channel, event, data) {
+    const message = JSON.stringify({ event, data, timestamp: Date.now() });
+    await redis.publish(channel, message);
+  },
+
+  // Subscribe to events (for server-side)
+  async subscribe(channel, callback) {
+    // Note: Redis pub/sub requires WebSocket or long polling for browser
+    // For now, we'll keep using Pusher for client notifications
+    console.log('Redis pub/sub setup for server-side events');
+  }
+};
+
+// Health check
+export const RedisHealth = {
+  async ping() {
+    try {
+      const result = await redis.ping();
+      return { status: 'healthy', result, timestamp: Date.now() };
+    } catch (error) {
+      return { status: 'error', error: error.message, timestamp: Date.now() };
+    }
+  },
+
+  async getInfo() {
+    const info = await redis.info();
+    return info;
   }
 };
 
