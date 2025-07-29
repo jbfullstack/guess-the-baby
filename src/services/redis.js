@@ -52,28 +52,70 @@ export const GameStateRedis = {
 export const PlayersRedis = {
   // Get all players
   async getPlayers() {
-    const players = await redis.lrange('game:players', 0, -1);
-    return players.map(p => JSON.parse(p));
+    try {
+      const players = await redis.lrange('game:players', 0, -1);
+      if (!players || players.length === 0) {
+        return [];
+      }
+      
+      // Handle both string JSON and already parsed objects
+      const validPlayers = [];
+      for (const playerData of players) {
+        try {
+          if (typeof playerData === 'string') {
+            // It's a JSON string, parse it
+            const parsed = JSON.parse(playerData);
+            validPlayers.push(parsed);
+          } else if (typeof playerData === 'object' && playerData !== null) {
+            // It's already an object, use as-is
+            validPlayers.push(playerData);
+          } else {
+            console.warn('Unknown player data type:', typeof playerData, playerData);
+          }
+        } catch (parseError) {
+          console.warn('Skipping invalid player data:', playerData, parseError.message);
+          // Skip invalid entries
+        }
+      }
+      
+      return validPlayers;
+    } catch (error) {
+      console.error('Error getting players:', error);
+      return [];
+    }
   },
 
   // Add player
   async addPlayer(player) {
-    const playerData = {
-      ...player,
-      joinedAt: new Date().toISOString(),
-      lastSeen: Date.now()
-    };
-    
-    // Check if player already exists
-    const players = await this.getPlayers();
-    const exists = players.find(p => p.name === player.name);
-    if (exists) {
-      throw new Error('Player name already taken');
-    }
+    try {
+      const playerData = {
+        ...player,
+        joinedAt: new Date().toISOString(),
+        lastSeen: Date.now()
+      };
+      
+      console.log('Adding player data:', playerData);
+      
+      // Check if player already exists
+      const players = await this.getPlayers();
+      const exists = players.find(p => p && p.name === player.name);
+      if (exists) {
+        throw new Error('Player name already taken');
+      }
 
-    await redis.lpush('game:players', JSON.stringify(playerData));
-    await redis.expire('game:players', 7200); // 2 hours TTL
-    return playerData;
+      // ALWAYS store as JSON string to avoid parsing issues
+      const playerJson = JSON.stringify(playerData);
+      console.log('Storing as JSON string:', playerJson);
+      
+      await redis.lpush('game:players', playerJson);
+      await redis.expire('game:players', 7200); // 2 hours TTL
+      
+      console.log('Player added successfully to Redis');
+      return playerData;
+    } catch (error) {
+      console.error('Error adding player:', error);
+      throw error;
+    }
   },
 
   // Remove player
@@ -91,6 +133,12 @@ export const PlayersRedis = {
       await pipeline.exec();
     }
     return filteredPlayers;
+  },
+
+  // Clear all players (helper for debugging)
+  async clearAllPlayers() {
+    await redis.del('game:players');
+    return { success: true, message: 'All players cleared' };
   },
 
   // Update player heartbeat
