@@ -23,8 +23,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Player name is required' });
     }
 
+    console.log(`🎮 Player "${playerName}" attempting to join...`);
+
     // 1. Get current game state from Redis (FAST!)
     const gameState = await GameStateRedis.getCurrentGame();
+    console.log('Game state loaded:', gameState.gameMode);
     
     // 2. Add player to Redis (ATOMIC!)
     const newPlayer = {
@@ -33,19 +36,24 @@ export default async function handler(req, res) {
       score: 0
     };
 
+    console.log('Adding player to Redis...');
     await PlayersRedis.addPlayer(newPlayer);
+    console.log('Player added successfully');
     
     // 3. Initialize score in Redis
     await ScoresRedis.setScore(newPlayer.name, 0);
+    console.log('Score initialized');
     
     // 4. Update heartbeat
     await PlayersRedis.updateHeartbeat(newPlayer.name);
+    console.log('Heartbeat updated');
 
     // 5. Get updated data
     const [allPlayers, allScores] = await Promise.all([
       PlayersRedis.getPlayers(),
       ScoresRedis.getScores()
     ]);
+    console.log(`Total players now: ${allPlayers.length}`);
 
     // 6. Notify all clients via Pusher
     await pusher.trigger('baby-game', 'player-joined', {
@@ -57,6 +65,7 @@ export default async function handler(req, res) {
         gameId: gameState.gameId
       }
     });
+    console.log('Pusher notification sent');
 
     // 7. Send sync state to new player
     await pusher.trigger('baby-game', 'sync-state', {
@@ -70,6 +79,7 @@ export default async function handler(req, res) {
         currentPhoto: gameState.currentPhoto ? JSON.parse(gameState.currentPhoto) : null
       }
     });
+    console.log('Sync state sent');
 
     const responseTime = Date.now() - startTime;
 
@@ -90,6 +100,15 @@ export default async function handler(req, res) {
     // Handle specific Redis errors
     if (error.message.includes('already taken')) {
       return res.status(400).json({ error: error.message });
+    }
+    
+    if (error.message.includes('JSON')) {
+      return res.status(500).json({
+        error: 'Redis data corruption detected. Please run cleanup.',
+        details: error.message,
+        solution: 'POST to /api/redis-cleanup to fix',
+        responseTime: `${Date.now() - startTime}ms`
+      });
     }
     
     res.status(500).json({ 
