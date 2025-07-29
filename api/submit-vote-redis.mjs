@@ -10,27 +10,25 @@ const pusher = new Pusher({
   useTLS: true,
 });
 
-// Système de score intelligent : Justesse + Vitesse + Ordre - CONFIGURABLE
-function calculateSmartScore(isCorrect, answerTime, totalTime, answerOrder, totalPlayers, scoringSettings = {}) {
+// Système de score intelligent : Justesse + Vitesse + Ordre
+function calculateSmartScore(isCorrect, answerTime, totalTime, answerOrder, totalPlayers) {
   if (!isCorrect) {
     return 0; // Pas de points pour mauvaise réponse
   }
 
-  // Paramètres configurables avec defaults
-  const basePoints = scoringSettings.basePoints || 100;
-  const maxSpeedBonus = scoringSettings.speedBonus || 50;
-  const maxOrderBonus = scoringSettings.orderBonus || 25;
+  // Points de base pour bonne réponse
+  const basePoints = 100;
   
-  // Bonus vitesse (0-maxSpeedBonus points) : plus tu réponds vite, plus tu as de bonus
+  // Bonus vitesse (0-50 points) : plus tu réponds vite, plus tu as de bonus
   const timeRatio = Math.max(0, (totalTime - answerTime) / totalTime);
-  const speedBonus = Math.round(timeRatio * maxSpeedBonus);
+  const speedBonus = Math.round(timeRatio * 50);
   
-  // Bonus ordre (0-maxOrderBonus points) : premier à répondre = max bonus
-  const orderBonus = Math.round((totalPlayers - answerOrder + 1) / totalPlayers * maxOrderBonus);
+  // Bonus ordre (0-25 points) : premier à répondre = max bonus
+  const orderBonus = Math.round((totalPlayers - answerOrder + 1) / totalPlayers * 25);
   
   const totalScore = basePoints + speedBonus + orderBonus;
   
-  console.log(`[SCORE] Configurable scoring: base=${basePoints}, speed=${speedBonus}/${maxSpeedBonus}, order=${orderBonus}/${maxOrderBonus}, total=${totalScore}`);
+  console.log(`[SCORE] Smart scoring: base=${basePoints}, speed=${speedBonus}, order=${orderBonus}, total=${totalScore}`);
   
   return totalScore;
 }
@@ -76,28 +74,17 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Invalid game state - corrupted photos data' });
     }
 
-    // Parse game settings safely - UPDATED AVEC SCORING PARAMS
-    let gameSettings = { 
-      timePerPhoto: 10, 
-      basePoints: 100, 
-      speedBonus: 50, 
-      orderBonus: 25 
-    };
+    // Parse game settings safely
+    let gameSettings = { timePerPhoto: 10 };
     try {
       if (typeof gameState.settings === 'string') {
-        gameSettings = { ...gameSettings, ...JSON.parse(gameState.settings) };
+        gameSettings = JSON.parse(gameState.settings);
       } else if (typeof gameState.settings === 'object') {
-        gameSettings = { ...gameSettings, ...gameState.settings };
+        gameSettings = gameState.settings;
       }
     } catch (e) {
       console.warn('Failed to parse game settings:', e.message);
     }
-
-    console.log(`[VOTE] Using scoring settings:`, {
-      basePoints: gameSettings.basePoints,
-      speedBonus: gameSettings.speedBonus,
-      orderBonus: gameSettings.orderBonus
-    });
 
     const currentPhoto = selectedPhotos[currentRound - 1];
 
@@ -111,7 +98,7 @@ export default async function handler(req, res) {
     // 2. Submit vote using VotesRedis service (with separate keys)
     const { votesCount } = await VotesRedis.submitVote(currentRound, playerName, answer);
 
-    // 3. Check if answer is correct and update score - SYSTÈME CONFIGURABLE
+    // 3. Check if answer is correct and update score - NOUVEAU SYSTÈME ASTUCIEUX
     let isCorrect = false;
     let scoreGained = 0;
     
@@ -133,30 +120,22 @@ export default async function handler(req, res) {
         correctPlayers.push(playerName);
         const answerOrder = correctPlayers.length;
         
-        // Get players count for order calculation
-        const players = await PlayersRedis.getPlayers();
-        
-        // Calculer score intelligent avec paramètres configurables
+        // Calculer score intelligent
         scoreGained = calculateSmartScore(
           true, 
           answerTime, 
           totalTime, 
           answerOrder, 
-          players.length,
-          gameSettings // NOUVEAU: Passe les paramètres de scoring configurables
+          players.length
         );
         
         await ScoresRedis.incrementScore(playerName, scoreGained);
         
-        console.log(`[VOTE] ✅ Correct answer! ${playerName} gets ${scoreGained} points (order: ${answerOrder}/${players.length}) with settings:`, {
-          basePoints: gameSettings.basePoints,
-          speedBonus: gameSettings.speedBonus,
-          orderBonus: gameSettings.orderBonus
-        });
+        console.log(`[VOTE] ✅ Correct answer! ${playerName} gets ${scoreGained} points (order: ${answerOrder})`);
         
         // Bonus pour le premier à répondre correctement
         if (answerOrder === 1) {
-          console.log(`[VOTE] 🥇 ${playerName} was FIRST to answer correctly! Bonus: ${gameSettings.orderBonus} pts`);
+          console.log(`[VOTE] 🥇 ${playerName} was FIRST to answer correctly!`);
         }
       } else {
         console.log(`[VOTE] ❌ Wrong answer. Correct: ${currentPhoto.person}, Got: ${answer}`);
@@ -203,7 +182,7 @@ export default async function handler(req, res) {
 
       console.log(`[VOTE] 📤 Round results sent via Pusher`);
 
-      // Wait 3 seconds then move to next photo or end game (AUTO-ADVANCE)
+      // Wait 3 seconds then move to next photo or end game
       setTimeout(async () => {
         try {
           console.log(`[VOTE] 🕐 3 seconds passed, checking if game should continue...`);
@@ -229,7 +208,7 @@ export default async function handler(req, res) {
               totalRounds: selectedPhotos.length
             });
             
-            console.log(`[VOTE] 🏆 Game ended. Winner: ${winner} with ${scores[winner]} points`);
+            console.log(`[VOTE] 🏆 Game ended. Winner: ${winner}`);
           } else {
             // Next photo
             const nextRound = currentRound + 1;
@@ -272,7 +251,7 @@ export default async function handler(req, res) {
         } catch (error) {
           console.error('[VOTE] ❌ Error in round completion:', error);
         }
-      }, 3000); // Auto-advance après 3 secondes
+      }, 3000);
     } else {
       console.log(`[VOTE] ⏳ Waiting for more votes: ${votesCount}/${players.length}`);
     }
@@ -283,7 +262,7 @@ export default async function handler(req, res) {
       success: true,
       message: answer === 'NO_ANSWER' ? 'Timer expiry processed' : 'Vote submitted successfully',
       correct: isCorrect,
-      scoreGained: scoreGained, // Score gagné pour feedback joueur
+      scoreGained: scoreGained, // NOUVEAU: Score gagné pour feedback joueur
       allVoted: allPlayersVoted,
       votesCount: votesCount,
       totalPlayers: players.length,

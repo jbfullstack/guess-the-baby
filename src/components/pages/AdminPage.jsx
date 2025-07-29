@@ -3,17 +3,11 @@ import { Play, Settings, Users, Image, Check, X, Shuffle, Eye, EyeOff, Edit3, Tr
 import { useGame } from '../../hooks/useGame';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
-import Pusher from 'pusher-js';
+import Pusher from 'pusher-js'; // NOUVEAU: Import Pusher
 
 const AdminPage = () => {
   const { gameState, actions } = useGame();
-  const [gameSettings, setGameSettings] = useState({
-    timePerPhoto: 10,
-    basePoints: 100,
-    speedBonus: 50,
-    orderBonus: 25,
-    ...gameState.gameSettings
-  });
+  const [gameSettings, setGameSettings] = useState(gameState.gameSettings);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [showVotes, setShowVotes] = useState(false);
   const [shuffleMessage, setShuffleMessage] = useState('');
@@ -21,7 +15,7 @@ const AdminPage = () => {
   const [editingPhoto, setEditingPhoto] = useState(null);
   const [editName, setEditName] = useState('');
   
-  // États pour les votes en temps réel
+  // NOUVEAU: États pour les votes en temps réel
   const [liveVotes, setLiveVotes] = useState({});
   const [liveVoteCount, setLiveVoteCount] = useState(0);
   const [liveTotalPlayers, setLiveTotalPlayers] = useState(0);
@@ -29,7 +23,7 @@ const AdminPage = () => {
   // Use real photos from gameState instead of mock data
   const allPhotos = gameState.photos;
 
-  // Setup Pusher pour admin
+  // NOUVEAU: Setup Pusher pour admin
   useEffect(() => {
     let pusher = null;
     let channel = null;
@@ -108,7 +102,7 @@ const AdminPage = () => {
     }
   }, [allPhotos]);
 
-  // Fonction pour obtenir les votes actuels (combinant gameState et live)
+  // NOUVEAU: Fonction pour obtenir les votes actuels (combinant gameState et live)
   const getCurrentVotes = () => {
     // Priorité aux votes live, fallback sur gameState
     const currentVotes = Object.keys(liveVotes).length > 0 ? liveVotes : (gameState.votes || {});
@@ -203,7 +197,7 @@ const AdminPage = () => {
     }
   };
 
-  // Fonction pour nettoyer les votes corrompus
+  // NOUVEAU: Fonction pour nettoyer les votes corrompus
   const cleanupCorruptedVotes = async () => {
     if (window.confirm('🧹 Clean corrupted vote data?\n\nThis will clear all current votes but keep players and game state.')) {
       try {
@@ -357,7 +351,7 @@ const AdminPage = () => {
               <p className="text-gray-300">Manage your baby photo guessing game</p>
             </div>
             <div className="flex space-x-2">
-              {/* Debug info */}
+              {/* NOUVEAU: Debug info */}
               <div className="text-xs text-gray-400">
                 Live: {totalVotes}/{totalPlayers}
               </div>
@@ -375,7 +369,7 @@ const AdminPage = () => {
 
         <div className="grid lg:grid-cols-3 gap-6">
           
-          {/* Game Settings - UPDATED WITH CONFIGURABLE SCORING */}
+          {/* Game Settings */}
           <Card>
             <div className="flex items-center space-x-2 mb-4">
               <Settings className="w-5 h-5 text-purple-400" />
@@ -383,9 +377,8 @@ const AdminPage = () => {
             </div>
             
             <div className="space-y-4">
-              {/* Timer Settings */}
               <div>
-                <label className="block text-gray-300 mb-2 text-sm font-medium">Time per photo (seconds)</label>
+                <label className="block text-gray-300 mb-2 text-sm">Time per photo (seconds)</label>
                 <input
                   type="number"
                   min="5"
@@ -397,82 +390,6 @@ const AdminPage = () => {
                   }))}
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white focus:border-purple-400 focus:outline-none"
                 />
-                <p className="text-xs text-gray-400 mt-1">Game auto-advances to next round after all players vote</p>
-              </div>
-
-              {/* Scoring Settings - NOUVEAU */}
-              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-                <h3 className="text-purple-400 font-medium mb-3 text-sm">🎯 Scoring System</h3>
-                
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-gray-300 mb-1 text-xs">Base Points</label>
-                    <input
-                      type="number"
-                      min="50"
-                      max="200"
-                      value={gameSettings.basePoints || 100}
-                      onChange={(e) => setGameSettings(prev => ({ 
-                        ...prev, 
-                        basePoints: parseInt(e.target.value) || 100 
-                      }))}
-                      className="w-full px-2 py-1 text-sm rounded bg-white/10 border border-white/20 text-white focus:border-purple-400 focus:outline-none"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">Correct answer</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-gray-300 mb-1 text-xs">Speed Bonus</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={gameSettings.speedBonus || 50}
-                      onChange={(e) => setGameSettings(prev => ({ 
-                        ...prev, 
-                        speedBonus: parseInt(e.target.value) || 50 
-                      }))}
-                      className="w-full px-2 py-1 text-sm rounded bg-white/10 border border-white/20 text-white focus:border-purple-400 focus:outline-none"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">Fast answers</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-gray-300 mb-1 text-xs">Order Bonus</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="50"
-                      value={gameSettings.orderBonus || 25}
-                      onChange={(e) => setGameSettings(prev => ({ 
-                        ...prev, 
-                        orderBonus: parseInt(e.target.value) || 25 
-                      }))}
-                      className="w-full px-2 py-1 text-sm rounded bg-white/10 border border-white/20 text-white focus:border-purple-400 focus:outline-none"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">First correct</p>
-                  </div>
-                </div>
-                
-                {/* Score Preview */}
-                <div className="mt-3 bg-black/20 rounded p-2">
-                  <p className="text-xs text-gray-300">
-                    <span className="text-purple-400">Max possible:</span> {(gameSettings.basePoints || 100) + (gameSettings.speedBonus || 50) + (gameSettings.orderBonus || 25)} pts
-                    <span className="text-gray-500 mx-2">•</span>
-                    <span className="text-purple-400">Min correct:</span> {gameSettings.basePoints || 100} pts
-                  </p>
-                </div>
-              </div>
-
-              {/* Exemples de scoring */}
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                <h4 className="text-blue-400 text-xs font-medium mb-2">💡 Scoring Examples:</h4>
-                <div className="text-xs text-gray-300 space-y-1">
-                  <p>🥇 <strong>First + Fast:</strong> {gameSettings.basePoints || 100} + {gameSettings.speedBonus || 50} + {gameSettings.orderBonus || 25} = {(gameSettings.basePoints || 100) + (gameSettings.speedBonus || 50) + (gameSettings.orderBonus || 25)} pts</p>
-                  <p>⚡ <strong>Fast + Second:</strong> {gameSettings.basePoints || 100} + {Math.round((gameSettings.speedBonus || 50) * 0.8)} + {Math.round((gameSettings.orderBonus || 25) * 0.5)} = {(gameSettings.basePoints || 100) + Math.round((gameSettings.speedBonus || 50) * 0.8) + Math.round((gameSettings.orderBonus || 25) * 0.5)} pts</p>
-                  <p>🐌 <strong>Slow + Correct:</strong> {gameSettings.basePoints || 100} + 0 + 0 = {gameSettings.basePoints || 100} pts</p>
-                  <p>❌ <strong>Wrong answer:</strong> 0 pts</p>
-                </div>
               </div>
             </div>
           </Card>
@@ -601,7 +518,7 @@ const AdminPage = () => {
                 🔄 Reset Game
               </Button>
 
-              {/* Cleanup button */}
+              {/* NOUVEAU: Cleanup button */}
               <Button 
                 variant="secondary" 
                 size="sm" 
@@ -611,7 +528,7 @@ const AdminPage = () => {
                 🧹 Clean Vote Data
               </Button>
               
-              {/* LIVE VOTES SECTION */}
+              {/* LIVE VOTES SECTION - UPDATED */}
               {gameState.gameMode === 'playing' && (
                 <div className="space-y-2">
                   <Button 
@@ -626,7 +543,7 @@ const AdminPage = () => {
                   
                   {showVotes && (
                     <div className="bg-white/5 rounded-lg p-3 space-y-1">
-                      {/* Debug info */}
+                      {/* NOUVEAU: Debug info */}
                       <div className="text-xs text-yellow-400 mb-2 font-mono bg-black/20 p-1 rounded">
                         Debug: Live={Object.keys(liveVotes).length} | State={Object.keys(gameState.votes || {}).length} | Count={totalVotes}/{totalPlayers}
                       </div>

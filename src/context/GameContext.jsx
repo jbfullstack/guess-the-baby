@@ -89,8 +89,7 @@ const initialGameState = {
   names: ['Alice', 'Bob', 'Charlie', 'Diana'],
   scores: {},
   gameSettings: {
-    timePerPhoto: 10,
-    autoNext: true
+    timePerPhoto: 10
   },
   gameHistory: [],
   isConnected: false,

@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    const { selectedPhotos, timePerPhoto = 10, autoNext = true } = req.body;
+    const { selectedPhotos, timePerPhoto = 10} = req.body;
 
     if (!selectedPhotos || selectedPhotos.length === 0) {
       return res.status(400).json({ error: 'No photos selected for the game' });
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
         // Don't include correct answer for security
       }),
       selectedPhotos: JSON.stringify(selectedPhotos),
-      settings: JSON.stringify({ timePerPhoto, autoNext }),
+      settings: JSON.stringify({ timePerPhoto }),
       startTime: Date.now(),
       startedAt: new Date().toISOString()
     };
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
         id: selectedPhotos[0].id,
         url: selectedPhotos[0].url
       },
-      settings: { timePerPhoto, autoNext },
+      settings: { timePerPhoto },
       totalPhotos: selectedPhotos.length,
       currentRound: 1,
       players: players,
