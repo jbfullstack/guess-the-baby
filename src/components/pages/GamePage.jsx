@@ -36,36 +36,44 @@ const GamePage = () => {
     }
   };
 
-  const handleLeaveGame = async () => {
-    if (window.confirm('Are you sure you want to leave the game?')) {
-        try {
-        // Show loading state
-        console.log('Leaving game...');
-        
-        await actions.leaveGame(gameState.playerName);
-        
-        // Navigate back to home
-        actions.setView('home');
-        
-        } catch (error) {
-        console.error('Failed to leave game:', error);
-        
-        // Show error but still allow local fallback
-        const shouldContinue = window.confirm(
-            'Failed to notify other players, but you can still leave locally. Continue?'
-        );
-        
-        if (shouldContinue) {
-            // Fallback to local state update
-            actions.updateGameState({ 
-            hasJoined: false,
-            playerName: '',
-            selectedAnswer: null 
-            });
+    const handleLeaveGame = async () => {
+        if (window.confirm('Are you sure you want to leave the game?')) {
+            try {
+            console.log('[LEAVE] Starting leave game process...');
+            console.log('[LEAVE] Player name:', gameState.playerName);
+            
+            // Call the leave game API
+            const result = await actions.leaveGame(gameState.playerName);
+            
+            console.log('[LEAVE] Leave game result:', result);
+            
+            // Navigate back to home
             actions.setView('home');
+            
+            // Show success message (optional)
+            console.log('[LEAVE] Successfully left the game');
+            
+            } catch (error) {
+            console.error('[LEAVE] Failed to leave game:', error);
+            
+            // Show detailed error but still allow local fallback
+            const errorMessage = error.message || 'Unknown error occurred';
+            const shouldContinue = window.confirm(
+                `Failed to notify other players: ${errorMessage}\n\nYou can still leave locally. Continue?`
+            );
+            
+            if (shouldContinue) {
+                console.log('[LEAVE] Using local fallback...');
+                // Fallback to local state update
+                actions.updateGameState({ 
+                hasJoined: false,
+                playerName: '',
+                selectedAnswer: null 
+                });
+                actions.setView('home');
+            }
+            }
         }
-        }
-    }
     };
 
 

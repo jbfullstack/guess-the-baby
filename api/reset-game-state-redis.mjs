@@ -1,5 +1,6 @@
 import Pusher from 'pusher';
 import { GameStateRedis, PlayersRedis, ScoresRedis, VotesRedis } from '../src/services/redis.js';
+import redis from '../src/services/redis.js';
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID,
@@ -19,30 +20,42 @@ export default async function handler(req, res) {
   try {
     const { resetType = 'hard', playerName, action } = req.body;
 
+    console.log(`[API] Reset/Remove request:`, { resetType, playerName, action });
+
     // REMOVE SINGLE PLAYER
     if (action === 'removePlayer' && playerName) {
-      console.log(`🚪 Removing player: ${playerName}`);
+      console.log(`[API] 🚪 Removing player: ${playerName}`);
 
       try {
         // Remove player from Redis
         const updatedPlayers = await PlayersRedis.removePlayer(playerName);
         
-        // Remove player score
-        await ScoresRedis.setScore(playerName, undefined); // This will remove the key
+        // Remove player score - fix the undefined issue
+        const currentScores = await ScoresRedis.getScores();
+        delete currentScores[playerName];
         
-        // Get all remaining scores
-        const allScores = await ScoresRedis.getScores();
+        // Reset scores without the removed player
+        await ScoresRedis.resetScores();
+        if (Object.keys(currentScores).length > 0) {
+          const pipeline = redis.pipeline();
+          Object.entries(currentScores).forEach(([name, score]) => {
+            pipeline.hset('game:scores', name, score);
+          });
+          await pipeline.exec();
+        }
 
         // Notify all clients that player left
         await pusher.trigger('baby-game', 'player-left', {
           playerName: playerName,
           remainingPlayers: updatedPlayers,
           totalPlayers: updatedPlayers.length,
-          scores: allScores,
+          scores: currentScores,
           timestamp: Date.now()
         });
 
         const responseTime = Date.now() - startTime;
+
+        console.log(`[API] ✅ Player ${playerName} removed successfully`);
 
         return res.json({ 
           success: true,
@@ -54,7 +67,9 @@ export default async function handler(req, res) {
         });
 
       } catch (error) {
+        console.error('[API] ❌ Remove player error:', error);
         return res.status(500).json({
+          success: false,
           error: `Failed to remove player: ${error.message}`,
           responseTime: `${Date.now() - startTime}ms`
         });
@@ -62,7 +77,7 @@ export default async function handler(req, res) {
     }
 
     // FULL GAME RESET (original functionality)
-    console.log(`🔄 Resetting game (${resetType})...`);
+    console.log(`[API] 🔄 Resetting game (${resetType})...`);
 
     // Reset all Redis data (FAST & ATOMIC!)
     await GameStateRedis.resetGame();
@@ -93,7 +108,7 @@ export default async function handler(req, res) {
 
     const responseTime = Date.now() - startTime;
 
-    console.log(`✅ Game reset completed in ${responseTime}ms`);
+    console.log(`[API] ✅ Game reset completed in ${responseTime}ms`);
 
     res.json({ 
       success: true,
@@ -107,9 +122,11 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Reset/Remove operation error:', error);
+    console.error('[API] ❌ Reset/Remove operation error:', error);
     res.status(500).json({ 
+      success: false,
       error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       responseTime: `${Date.now() - startTime}ms`
     });
   }

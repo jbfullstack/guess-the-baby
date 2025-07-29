@@ -88,7 +88,7 @@ class ApiService {
 
   // Reset game (REDIS-POWERED!)
   async resetGame(resetType = 'hard') {
-    return this.call('reset-game-redis', { resetType }, 'POST');
+    return this.call('reset-game-state-redis', { resetType }, 'POST');
   }
 
   // NEW: Test Redis connection

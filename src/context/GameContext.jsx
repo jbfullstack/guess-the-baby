@@ -428,9 +428,26 @@ export const GameProvider = ({ children }) => {
     recoverState: recoverGameState,
 
     // Game reset
-    resetGame: async (resetType = 'soft') => {
+    resetGame: async (resetType = 'hard') => {
       try {
-        const result = await apiService.resetGame(resetType);
+        const response = await fetch('/api/reset-game-state-redis', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ resetType }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Reset failed');
+        }
+        
         return result;
       } catch (error) {
         console.error('Failed to reset game:', error);
@@ -452,16 +469,22 @@ export const GameProvider = ({ children }) => {
           }),
         });
 
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const result = await response.json();
         
-        if (result.success) {
-          // Update local state
-          updateGameState({ 
-            hasJoined: false,
-            playerName: '',
-            selectedAnswer: null
-          });
+        if (!result.success) {
+          throw new Error(result.error || 'Leave game failed');
         }
+        
+        // Update local state
+        updateGameState({ 
+          hasJoined: false,
+          playerName: '',
+          selectedAnswer: null
+        });
         
         return result;
       } catch (error) {
@@ -484,7 +507,16 @@ export const GameProvider = ({ children }) => {
           }),
         });
 
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Remove player failed');
+        }
+        
         return result;
       } catch (error) {
         console.error('Failed to remove player:', error);
