@@ -215,15 +215,16 @@ export const ScoresRedis = {
   }
 };
 
-// REMPLACE la section VotesRedis dans redis.js - FIX UPSTASH BUG
 
 export const VotesRedis = {
-  // Submit vote - VERSION SIMPLE qui marche
+  // Submit vote - AVEC KEYS SÉPARÉES
   async submitVote(round, playerName, answer) {
-    const voteKey = `game:votes:round:${round}`;
+    // Use separate Redis keys instead of corrupted hashes
+    const voteKey = `vote:r${round}:player:${playerName}`;
+    const countKey = `vote:r${round}:count`;
     
     // Check if player already voted
-    const existingVote = await redis.hget(voteKey, `player:${playerName}`);
+    const existingVote = await redis.get(voteKey);
     if (existingVote) {
       throw new Error('Player already voted this round');
     }
@@ -231,21 +232,13 @@ export const VotesRedis = {
     console.log(`[VOTES] Submitting vote: ${playerName} -> ${answer} for round ${round}`);
 
     try {
-      // SIMPLE APPROACH: Individual operations instead of pipeline
-      
-      // 1. Store the vote
-      await redis.hset(voteKey, `player:${playerName}`, answer);
+      // Store vote and increment count with separate keys
+      await redis.set(voteKey, answer, { ex: 1800 }); // 30min expiry
       console.log(`[VOTES] ✅ Vote stored: ${playerName} -> ${answer}`);
       
-      // 2. Get current count, increment, and store back
-      const currentCountStr = await redis.hget(voteKey, 'meta:votes_count');
-      const currentCount = parseInt(currentCountStr) || 0;
-      const newCount = currentCount + 1;
-      await redis.hset(voteKey, 'meta:votes_count', newCount.toString());
-      console.log(`[VOTES] ✅ Vote count updated: ${currentCount} -> ${newCount}`);
-      
-      // 3. Set expiry
-      await redis.expire(voteKey, 1800);
+      const newCount = await redis.incr(countKey);
+      await redis.expire(countKey, 1800); // 30min expiry
+      console.log(`[VOTES] ✅ Vote count incremented to: ${newCount}`);
       
       console.log(`[VOTES] Vote submission completed successfully. Final count: ${newCount}`);
       
@@ -257,53 +250,49 @@ export const VotesRedis = {
     }
   },
 
-  // Get votes for a round - FIX UPSTASH BUG
+  // Get votes for a round - AVEC KEYS SÉPARÉES
   async getRoundVotes(round) {
-    const voteKey = `game:votes:round:${round}`;
-    
     try {
-      // UPSTASH BUG WORKAROUND: Use individual HGET instead of HGETALL
-      console.log(`[VOTES] 🔧 Getting votes with Upstash workaround for round ${round}`);
+      console.log(`[VOTES] 🔧 Getting votes with SEPARATE KEYS for round ${round}`);
       
-      // Get metadata first
+      // Get vote count
+      const countKey = `vote:r${round}:count`;
+      const totalKey = `vote:r${round}:total`;
+      
       const [votesCountStr, totalPlayersStr] = await Promise.all([
-        redis.hget(voteKey, 'meta:votes_count'),
-        redis.hget(voteKey, 'meta:total_players')
+        redis.get(countKey),
+        redis.get(totalKey)
       ]);
       
       const votesCount = parseInt(votesCountStr) || 0;
       const totalPlayers = parseInt(totalPlayersStr) || 0;
       
-      console.log(`[VOTES] 📊 Meta data: votesCount=${votesCount}, totalPlayers=${totalPlayers}`);
+      console.log(`[VOTES] 📊 Count=${votesCount}, Total=${totalPlayers}`);
       
-      // Get all field names to find player votes
-      const allFields = await redis.hkeys(voteKey);
-      console.log(`[VOTES] 🔑 All field keys:`, allFields);
+      // Get all vote keys for this round using pattern matching
+      const votePattern = `vote:r${round}:player:*`;
+      const voteKeys = await redis.keys(votePattern);
+      
+      console.log(`[VOTES] 🔑 Found vote keys:`, voteKeys);
       
       const votes = {};
       
-      // Filter and get player votes only
-      const playerFields = allFields.filter(field => 
-        field && 
-        typeof field === 'string' && 
-        field.startsWith('player:') &&
-        field.length > 7 // "player:" + at least 1 char
-      );
-      
-      console.log(`[VOTES] 👥 Player fields found:`, playerFields);
-      
-      // Get votes for each player
-      for (const field of playerFields) {
-        try {
-          const playerName = field.replace('player:', '');
-          const vote = await redis.hget(voteKey, field);
-          if (vote && typeof vote === 'string') {
-            votes[playerName] = vote;
-            console.log(`[VOTES] ✅ Got vote: ${playerName} -> ${vote}`);
+      // Get each vote
+      if (voteKeys && voteKeys.length > 0) {
+        const voteValues = await redis.mget(...voteKeys);
+        
+        voteKeys.forEach((key, index) => {
+          // Extract player name from key: vote:r1:player:jeremy -> jeremy
+          const keyParts = key.split(':');
+          if (keyParts.length >= 4 && keyParts[0] === 'vote' && keyParts[2] === 'player') {
+            const playerName = keyParts.slice(3).join(':'); // Handle names with colons
+            const vote = voteValues[index];
+            if (vote) {
+              votes[playerName] = vote;
+              console.log(`[VOTES] ✅ Got vote: ${playerName} -> ${vote}`);
+            }
           }
-        } catch (fieldError) {
-          console.warn(`[VOTES] ⚠️ Error getting vote for field ${field}:`, fieldError);
-        }
+        });
       }
       
       console.log(`[VOTES] ✅ Final parsed votes for round ${round}:`, { 
@@ -324,34 +313,45 @@ export const VotesRedis = {
   // Clear votes for a round
   async clearRoundVotes(round) {
     console.log(`[VOTES] 🧹 Clearing votes for round ${round}`);
-    await redis.del(`game:votes:round:${round}`);
+    
+    try {
+      // Get all keys for this round
+      const pattern = `vote:r${round}:*`;
+      const keys = await redis.keys(pattern);
+      
+      if (keys && keys.length > 0) {
+        await redis.del(...keys);
+        console.log(`[VOTES] ✅ Deleted ${keys.length} keys for round ${round}`);
+      }
+    } catch (error) {
+      console.error(`[VOTES] ❌ Error clearing round ${round}:`, error);
+    }
   },
 
   // Set total players for vote counting
   async setTotalPlayers(round, totalPlayers) {
-    const voteKey = `game:votes:round:${round}`;
+    const totalKey = `vote:r${round}:total`;
     console.log(`[VOTES] 👥 Setting total players for round ${round}: ${totalPlayers}`);
-    await redis.hset(voteKey, 'meta:total_players', totalPlayers.toString());
-    await redis.expire(voteKey, 1800);
+    await redis.set(totalKey, totalPlayers.toString(), { ex: 1800 });
   },
 
-  // FORCE delete specific round (for testing)
-  async forceDeleteRound(round) {
-    const voteKey = `game:votes:round:${round}`;
-    console.log(`[VOTES] 🧨 FORCE DELETE round ${round}`);
+  // FORCE cleanup all vote data
+  async forceCleanupAllVotes() {
+    console.log(`[VOTES] 🧨 FORCE CLEANUP: Deleting ALL vote keys...`);
     
     try {
-      // Get all keys first
-      const allFields = await redis.hkeys(voteKey);
-      console.log(`[VOTES] Fields to delete:`, allFields);
+      // Get all vote keys
+      const allVoteKeys = await redis.keys('vote:*');
+      console.log(`[VOTES] Found ${allVoteKeys.length} vote keys to delete`);
       
-      // Delete the entire hash
-      const result = await redis.del(voteKey);
-      console.log(`[VOTES] ✅ Deleted round ${round}, result:`, result);
+      if (allVoteKeys.length > 0) {
+        await redis.del(...allVoteKeys);
+        console.log(`[VOTES] ✅ Deleted ${allVoteKeys.length} vote keys`);
+      }
       
-      return { success: true, deletedFields: allFields.length };
+      return { success: true, deletedKeys: allVoteKeys.length };
     } catch (error) {
-      console.error(`[VOTES] ❌ Error deleting round ${round}:`, error);
+      console.error(`[VOTES] ❌ Error in force cleanup:`, error);
       return { success: false, error: error.message };
     }
   }
