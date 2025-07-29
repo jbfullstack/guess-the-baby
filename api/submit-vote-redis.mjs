@@ -10,6 +10,34 @@ const pusher = new Pusher({
   useTLS: true,
 });
 
+// Système de score intelligent : Justesse + Vitesse + Ordre - CONFIGURABLE
+function calculateSmartScore(isCorrect, answerTime, totalTime, answerOrder, totalPlayers, scoringSettings = {}) {
+  if (!isCorrect) {
+    return 0; // Pas de points pour mauvaise réponse
+  }
+
+  // Paramètres configurables avec defaults
+  const basePoints = scoringSettings.basePoints || 100;
+  const maxSpeedBonus = scoringSettings.speedBonus || 50;
+  const maxOrderBonus = scoringSettings.orderBonus || 25;
+  
+  // Bonus vitesse (0-maxSpeedBonus points) : plus tu réponds vite, plus tu as de bonus
+  const timeRatio = Math.max(0, (totalTime - answerTime) / totalTime);
+  const speedBonus = Math.round(timeRatio * maxSpeedBonus);
+  
+  // Bonus ordre (0-maxOrderBonus points) : premier à répondre = max bonus
+  const orderBonus = Math.round((totalPlayers - answerOrder + 1) / totalPlayers * maxOrderBonus);
+  
+  const totalScore = basePoints + speedBonus + orderBonus;
+  
+  console.log(`[SCORE] Configurable scoring: base=${basePoints}, speed=${speedBonus}/${maxSpeedBonus}, order=${orderBonus}/${maxOrderBonus}, total=${totalScore}`);
+  
+  return totalScore;
+}
+
+// Tracker pour l'ordre des réponses correctes
+const correctAnswerOrder = new Map(); // round -> [playerName1, playerName2, ...]
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -48,6 +76,29 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Invalid game state - corrupted photos data' });
     }
 
+    // Parse game settings safely - UPDATED AVEC SCORING PARAMS
+    let gameSettings = { 
+      timePerPhoto: 10, 
+      basePoints: 100, 
+      speedBonus: 50, 
+      orderBonus: 25 
+    };
+    try {
+      if (typeof gameState.settings === 'string') {
+        gameSettings = { ...gameSettings, ...JSON.parse(gameState.settings) };
+      } else if (typeof gameState.settings === 'object') {
+        gameSettings = { ...gameSettings, ...gameState.settings };
+      }
+    } catch (e) {
+      console.warn('Failed to parse game settings:', e.message);
+    }
+
+    console.log(`[VOTE] Using scoring settings:`, {
+      basePoints: gameSettings.basePoints,
+      speedBonus: gameSettings.speedBonus,
+      orderBonus: gameSettings.orderBonus
+    });
+
     const currentPhoto = selectedPhotos[currentRound - 1];
 
     if (!currentPhoto) {
@@ -57,25 +108,56 @@ export default async function handler(req, res) {
 
     console.log(`[VOTE] Processing vote for round ${currentRound}, photo: ${currentPhoto.person}, answer: ${answer}`);
 
-    // 2. Check if player already voted using NEW format with prefix
-    const voteKey = `game:votes:round:${currentRound}`;
-    const existingVote = await redis.hget(voteKey, `player:${playerName}`);
-    if (existingVote) {
-      console.log(`[VOTE] Player ${playerName} already voted: ${existingVote}`);
-      return res.status(400).json({ error: 'Player already voted this round' });
-    }
-
-    // 3. Submit vote using VotesRedis service (which now uses prefixes)
+    // 2. Submit vote using VotesRedis service (with separate keys)
     const { votesCount } = await VotesRedis.submitVote(currentRound, playerName, answer);
 
-    // 4. Check if answer is correct and update score
-    // UPDATED: Handle NO_ANSWER case
+    // 3. Check if answer is correct and update score - SYSTÈME CONFIGURABLE
     let isCorrect = false;
+    let scoreGained = 0;
+    
     if (answer !== 'NO_ANSWER') {
       isCorrect = answer === currentPhoto.person;
+      
       if (isCorrect) {
-        await ScoresRedis.incrementScore(playerName, 1);
-        console.log(`[VOTE] ✅ Correct answer! ${playerName} gets a point.`);
+        // Calculer le temps de réponse (approximatif basé sur timestamp)
+        const gameStartTime = parseInt(gameState.startTime) || Date.now();
+        const answerTime = Date.now() - gameStartTime;
+        const totalTime = gameSettings?.timePerPhoto * 1000 || 10000; // 10 sec default
+        
+        // Tracker de l'ordre des bonnes réponses
+        const roundKey = `round_${currentRound}`;
+        if (!correctAnswerOrder.has(roundKey)) {
+          correctAnswerOrder.set(roundKey, []);
+        }
+        const correctPlayers = correctAnswerOrder.get(roundKey);
+        correctPlayers.push(playerName);
+        const answerOrder = correctPlayers.length;
+        
+        // Get players count for order calculation
+        const players = await PlayersRedis.getPlayers();
+        
+        // Calculer score intelligent avec paramètres configurables
+        scoreGained = calculateSmartScore(
+          true, 
+          answerTime, 
+          totalTime, 
+          answerOrder, 
+          players.length,
+          gameSettings // NOUVEAU: Passe les paramètres de scoring configurables
+        );
+        
+        await ScoresRedis.incrementScore(playerName, scoreGained);
+        
+        console.log(`[VOTE] ✅ Correct answer! ${playerName} gets ${scoreGained} points (order: ${answerOrder}/${players.length}) with settings:`, {
+          basePoints: gameSettings.basePoints,
+          speedBonus: gameSettings.speedBonus,
+          orderBonus: gameSettings.orderBonus
+        });
+        
+        // Bonus pour le premier à répondre correctement
+        if (answerOrder === 1) {
+          console.log(`[VOTE] 🥇 ${playerName} was FIRST to answer correctly! Bonus: ${gameSettings.orderBonus} pts`);
+        }
       } else {
         console.log(`[VOTE] ❌ Wrong answer. Correct: ${currentPhoto.person}, Got: ${answer}`);
       }
@@ -83,17 +165,19 @@ export default async function handler(req, res) {
       console.log(`[VOTE] ⏰ Timer expired for ${playerName} - no points awarded`);
     }
 
-    // 5. Update player heartbeat
+    // 4. Update player heartbeat
     await PlayersRedis.updateHeartbeat(playerName);
 
-    // 6. Get current vote status using NEW format
+    // 5. Get current vote status using NEW format
     const { votes } = await VotesRedis.getRoundVotes(currentRound);
     const players = await PlayersRedis.getPlayers();
+    
+    console.log(`[VOTE] Checking completion: votesCount=${votesCount}, players=${players.length}`);
     const allPlayersVoted = votesCount >= players.length;
 
     console.log(`[VOTE] Vote submitted. Votes: ${JSON.stringify(votes)}, Count: ${votesCount}/${players.length}`);
 
-    // 7. Emit vote update
+    // 6. Emit vote update
     await pusher.trigger('baby-game', 'vote-update', {
       votes: votes,
       votesCount: votesCount,
@@ -102,9 +186,9 @@ export default async function handler(req, res) {
       round: currentRound
     });
 
-    // 8. If all players voted, handle round completion
+    // 7. If all players voted, handle round completion - FIXED
     if (allPlayersVoted) {
-      console.log(`[VOTE] 🎯 All players voted! Processing round completion...`);
+      console.log(`[VOTE] 🎯 All ${players.length} players voted! Processing round completion...`);
       
       const scores = await ScoresRedis.getScores();
       
@@ -117,14 +201,21 @@ export default async function handler(req, res) {
         photo: currentPhoto
       });
 
-      // Wait 3 seconds then move to next photo or end game
+      console.log(`[VOTE] 📤 Round results sent via Pusher`);
+
+      // Wait 3 seconds then move to next photo or end game (AUTO-ADVANCE)
       setTimeout(async () => {
         try {
+          console.log(`[VOTE] 🕐 3 seconds passed, checking if game should continue...`);
+          console.log(`[VOTE] Current round: ${currentRound}, Total photos: ${selectedPhotos.length}`);
+          
           if (currentRound >= selectedPhotos.length) {
             console.log(`[VOTE] 🏁 Game finished! Final round: ${currentRound}/${selectedPhotos.length}`);
             
             // Game finished - save to GitHub history (async)
-            await saveGameToGitHubHistory(gameState, scores);
+            saveGameToGitHubHistory(gameState, scores).catch(err => 
+              console.error('[VOTE] History save failed:', err)
+            );
             
             // Update game state to finished
             await GameStateRedis.updateGameField('gameMode', 'finished');
@@ -138,7 +229,7 @@ export default async function handler(req, res) {
               totalRounds: selectedPhotos.length
             });
             
-            console.log(`[VOTE] 🏆 Game ended. Winner: ${winner}`);
+            console.log(`[VOTE] 🏆 Game ended. Winner: ${winner} with ${scores[winner]} points`);
           } else {
             // Next photo
             const nextRound = currentRound + 1;
@@ -148,13 +239,23 @@ export default async function handler(req, res) {
             
             // Update game state
             await GameStateRedis.updateGameField('currentRound', nextRound);
-            await GameStateRedis.updateGameField('currentPhoto', {
+            await GameStateRedis.updateGameField('currentPhoto', JSON.stringify({
               id: nextPhoto.id,
               url: nextPhoto.url
-            });
+            }));
+            
+            // Clear previous round votes
+            await VotesRedis.clearRoundVotes(currentRound);
+            console.log(`[VOTE] 🧹 Cleared votes for completed round ${currentRound}`);
             
             // Set up vote counting for next round
             await VotesRedis.setTotalPlayers(nextRound, players.length);
+            console.log(`[VOTE] 👥 Set total players for round ${nextRound}: ${players.length}`);
+
+            // Nettoyer l'ordre des réponses pour le round terminé
+            const roundKey = `round_${currentRound}`;
+            correctAnswerOrder.delete(roundKey);
+            console.log(`[VOTE] 🧹 Cleaned answer order for completed round ${currentRound}`);
 
             await pusher.trigger('baby-game', 'next-photo', {
               photo: {
@@ -165,11 +266,15 @@ export default async function handler(req, res) {
               totalRounds: selectedPhotos.length,
               scores: scores
             });
+            
+            console.log(`[VOTE] 📤 Next photo event sent via Pusher`);
           }
         } catch (error) {
-          console.error('[VOTE] Error in round completion:', error);
+          console.error('[VOTE] ❌ Error in round completion:', error);
         }
-      }, 3000);
+      }, 3000); // Auto-advance après 3 secondes
+    } else {
+      console.log(`[VOTE] ⏳ Waiting for more votes: ${votesCount}/${players.length}`);
     }
 
     const responseTime = Date.now() - startTime;
@@ -178,6 +283,7 @@ export default async function handler(req, res) {
       success: true,
       message: answer === 'NO_ANSWER' ? 'Timer expiry processed' : 'Vote submitted successfully',
       correct: isCorrect,
+      scoreGained: scoreGained, // Score gagné pour feedback joueur
       allVoted: allPlayersVoted,
       votesCount: votesCount,
       totalPlayers: players.length,

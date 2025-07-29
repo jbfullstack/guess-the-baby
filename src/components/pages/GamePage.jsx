@@ -10,6 +10,7 @@ const GamePage = () => {
   const [playerName, setPlayerName] = useState('');
   const [gameResult, setGameResult] = useState(null);
   const [hasTimerExpired, setHasTimerExpired] = useState(false);
+  const [lastScoreGained, setLastScoreGained] = useState(0); // NOUVEAU
 
   // AUTO-SUBMIT when timer expires
   const handleTimerExpired = async () => {
@@ -44,6 +45,7 @@ const GamePage = () => {
   // Reset timer state when round changes
   useEffect(() => {
     setHasTimerExpired(false);
+    setLastScoreGained(0); // NOUVEAU: Reset score display when round changes
   }, [gameState.currentRound]);
 
   const joinGame = async () => {
@@ -59,7 +61,14 @@ const GamePage = () => {
   const submitAnswer = async () => {
     if (gameState.selectedAnswer && gameState.selectedAnswer !== 'NO_ANSWER') {
       try {
-        await actions.submitVote(gameState.selectedAnswer);
+        const result = await actions.submitVote(gameState.selectedAnswer);
+        
+        // NOUVEAU: Afficher le score gagné
+        if (result.scoreGained) {
+          setLastScoreGained(result.scoreGained);
+          console.log(`🎯 Score gained: ${result.scoreGained} points!`);
+        }
+        
       } catch (error) {
         alert('Failed to submit vote: ' + error.message);
       }
@@ -305,7 +314,7 @@ const GamePage = () => {
     );
   }
 
-  // Active Game - UPDATED WITH TIMER FIXES
+  // Active Game - WITH SCORE FEEDBACK
   if (gameState.gameMode === 'playing') {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -399,11 +408,11 @@ const GamePage = () => {
             Round {gameState.currentRound || 1} of {gameState.totalPhotos || '?'} • {gameState.players.length} players
           </div>
           
-          {/* Status Messages - UPDATED */}
+          {/* Status Messages - UPDATED WITH SCORE DISPLAY */}
           {gameState.selectedAnswer === 'NO_ANSWER' && (
             <div className="mt-4 bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-3">
               <p className="text-yellow-400 text-sm">
-                ⏰ Time expired! Waiting for other players to finish...
+                ⏰ Time expired! Waiting for other players...
               </p>
             </div>
           )}
@@ -413,6 +422,21 @@ const GamePage = () => {
               <p className="text-blue-400 text-sm">
                 ✅ Vote submitted! Waiting for other players...
               </p>
+              
+              {/* NOUVEAU: Affichage du score gagné */}
+              {lastScoreGained > 0 && (
+                <div className="mt-2 bg-green-500/20 border border-green-500/30 rounded-lg p-2">
+                  <p className="text-green-400 text-sm font-bold text-center">
+                    🎯 +{lastScoreGained} points earned!
+                  </p>
+                  <p className="text-green-300 text-xs mt-1">
+                    {lastScoreGained >= 150 ? '🚀 Lightning fast!' : 
+                     lastScoreGained >= 125 ? '⚡ Good speed!' : 
+                     '✅ Correct answer!'}
+                  </p>
+                </div>
+              )}
+              
               <div className="text-xs text-blue-300 mt-1">
                 {gameState.votes ? Object.keys(gameState.votes).length : 0} / {gameState.players.length} players have voted
               </div>
