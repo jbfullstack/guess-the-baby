@@ -29,7 +29,9 @@ export const GameStateRedis = {
 
   // Update specific game field
   async updateGameField(field, value) {
-    await redis.hset('game:current', field, JSON.stringify(value));
+    // Store value as-is if it's already a string, otherwise stringify
+    const finalValue = typeof value === 'string' ? value : JSON.stringify(value);
+    await redis.hset('game:current', field, finalValue);
     return value;
   },
 

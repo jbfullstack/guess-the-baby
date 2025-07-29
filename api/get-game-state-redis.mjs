@@ -27,23 +27,45 @@ export default async function handler(req, res) {
       currentVotes = votes;
     }
 
-    // 3. Parse stored JSON data
+    // 3. Parse stored JSON data safely
     let currentPhoto = null;
     let selectedPhotos = [];
     
     if (gameState.currentPhoto) {
       try {
-        currentPhoto = JSON.parse(gameState.currentPhoto);
+        if (typeof gameState.currentPhoto === 'string') {
+          currentPhoto = JSON.parse(gameState.currentPhoto);
+        } else if (typeof gameState.currentPhoto === 'object') {
+          currentPhoto = gameState.currentPhoto;
+        }
       } catch (e) {
-        console.warn('Failed to parse currentPhoto:', e);
+        console.warn('Failed to parse currentPhoto:', e.message);
       }
     }
 
     if (gameState.selectedPhotos) {
       try {
-        selectedPhotos = JSON.parse(gameState.selectedPhotos);
+        if (typeof gameState.selectedPhotos === 'string') {
+          selectedPhotos = JSON.parse(gameState.selectedPhotos);
+        } else if (Array.isArray(gameState.selectedPhotos)) {
+          selectedPhotos = gameState.selectedPhotos;
+        }
       } catch (e) {
-        console.warn('Failed to parse selectedPhotos:', e);
+        console.warn('Failed to parse selectedPhotos:', e.message);
+      }
+    }
+
+    // Parse settings safely
+    let gameSettings = { timePerPhoto: 10, autoNext: true };
+    if (gameState.settings) {
+      try {
+        if (typeof gameState.settings === 'string') {
+          gameSettings = JSON.parse(gameState.settings);
+        } else if (typeof gameState.settings === 'object') {
+          gameSettings = gameState.settings;
+        }
+      } catch (e) {
+        console.warn('Failed to parse settings:', e.message);
       }
     }
 
@@ -69,7 +91,7 @@ export default async function handler(req, res) {
         players: players,
         scores: scores,
         votes: currentVotes,
-        settings: gameState.settings ? JSON.parse(gameState.settings) : { timePerPhoto: 10, autoNext: true },
+        settings: gameSettings,
         startTime: gameState.startTime ? parseInt(gameState.startTime) : null,
         startedAt: gameState.startedAt
       },

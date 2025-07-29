@@ -31,12 +31,28 @@ export default async function handler(req, res) {
     }
 
     const currentRound = parseInt(gameState.currentRound) || 1;
-    const selectedPhotos = JSON.parse(gameState.selectedPhotos || '[]');
+    
+    // Parse selectedPhotos safely
+    let selectedPhotos = [];
+    try {
+      if (typeof gameState.selectedPhotos === 'string') {
+        selectedPhotos = JSON.parse(gameState.selectedPhotos);
+      } else if (Array.isArray(gameState.selectedPhotos)) {
+        selectedPhotos = gameState.selectedPhotos;
+      }
+    } catch (e) {
+      console.error('Failed to parse selectedPhotos:', e.message);
+      return res.status(500).json({ error: 'Invalid game state - corrupted photos data' });
+    }
+
     const currentPhoto = selectedPhotos[currentRound - 1];
 
     if (!currentPhoto) {
-      return res.status(400).json({ error: 'Invalid game state' });
+      console.error('No photo found for round:', currentRound, 'in photos:', selectedPhotos);
+      return res.status(400).json({ error: 'Invalid game state - no photo for current round' });
     }
+
+    console.log(`[DEBUG] Processing vote for round ${currentRound}, photo: ${currentPhoto.person}, answer: ${answer}`);
 
     // 2. Submit vote (ATOMIC - no race conditions!)
     const { votesCount } = await VotesRedis.submitVote(currentRound, playerName, answer);
