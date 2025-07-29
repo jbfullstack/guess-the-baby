@@ -31,6 +31,76 @@ const AdminPage = () => {
     }
   }, [allPhotos]);
 
+  // PLAYER MANAGEMENT FUNCTIONS
+  const removePlayer = async (playerName) => {
+    if (window.confirm(`Are you sure you want to remove player "${playerName}" from the game?`)) {
+      try {
+        const response = await fetch('/api/reset-game-state-redis', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'removePlayer',
+            playerName: playerName
+          }),
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          setShuffleMessage(`🚪 Player "${playerName}" removed successfully`);
+          setTimeout(() => setShuffleMessage(''), 3000);
+        } else {
+          alert('Failed to remove player: ' + result.error);
+        }
+      } catch (error) {
+        alert('Failed to remove player: ' + error.message);
+      }
+    }
+  };
+
+  const clearAllPlayers = async () => {
+    if (window.confirm(`Remove ALL ${gameState.players.length} players from the game?\n\nThis will NOT reset the game state, only remove players.`)) {
+      try {
+        // Remove each player individually
+        const playerNames = gameState.players.map(p => p.name || p);
+        
+        for (const playerName of playerNames) {
+          await fetch('/api/reset-game-state-redis', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              action: 'removePlayer',
+              playerName: playerName
+            }),
+          });
+        }
+        
+        setShuffleMessage(`🧹 All ${playerNames.length} players removed successfully`);
+        setTimeout(() => setShuffleMessage(''), 3000);
+        
+      } catch (error) {
+        alert('Failed to clear all players: ' + error.message);
+      }
+    }
+  };
+
+  const resetGame = async () => {
+    if (window.confirm('Are you sure you want to reset the game? This will:\n• Clear all players\n• Stop current game\n• Reset all scores\n\nThis action cannot be undone.')) {
+      try {
+        await actions.resetGame('hard');
+        setShuffleMessage('🔄 Game reset successfully - all players cleared');
+        setTimeout(() => setShuffleMessage(''), 3000);
+      } catch (error) {
+        alert('Failed to reset game: ' + error.message);
+      }
+    }
+  };
+
+  // PHOTO MANAGEMENT FUNCTIONS
   const togglePhotoSelection = (photoId) => {
     setSelectedPhotos(prev => 
       prev.includes(photoId) 
@@ -118,35 +188,6 @@ const AdminPage = () => {
       alert('Failed to update name: ' + error.message);
     }
   };
-
-  // Ajouter cette fonction removePlayer avant le render dans AdminPage.jsx
-const removePlayer = async (playerName) => {
-  if (window.confirm(`Are you sure you want to remove player "${playerName}" from the game?`)) {
-    try {
-      const response = await fetch('/api/reset-game-state-redis', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'removePlayer',
-          playerName: playerName
-        }),
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setShuffleMessage(`🚪 Player "${playerName}" removed successfully`);
-        setTimeout(() => setShuffleMessage(''), 3000);
-      } else {
-        alert('Failed to remove player: ' + result.error);
-      }
-    } catch (error) {
-      alert('Failed to remove player: ' + error.message);
-    }
-  }
-};
 
   const cancelEdit = () => {
     setEditingPhoto(null);
@@ -245,101 +286,97 @@ const removePlayer = async (playerName) => {
             </div>
           </Card>
           
-         {/* Players */}
-        <Card>
-        <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-            <Users className="w-5 h-5 text-purple-400" />
-            <h2 className="text-xl font-semibold text-white">
-                Players ({gameState.players.length})
-            </h2>
+          {/* Players */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <Users className="w-5 h-5 text-purple-400" />
+                <h2 className="text-xl font-semibold text-white">
+                  Players ({gameState.players.length})
+                </h2>
+              </div>
+              
+              {/* Players management buttons */}
+              {gameState.players.length > 0 && (
+                <div className="flex space-x-2">
+                  <Button 
+                    size="sm" 
+                    variant="danger" 
+                    onClick={clearAllPlayers}
+                    title="Remove all players (keeps game state)"
+                  >
+                    Clear All
+                  </Button>
+                </div>
+              )}
             </div>
             
-            {/* Players management buttons */}
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {gameState.players.length > 0 ? (
+                gameState.players.map((player, index) => (
+                  <div key={player.name || index} className="flex items-center justify-between bg-white/5 rounded-lg p-3 group hover:bg-white/10 transition-colors">
+                    <div className="flex items-center space-x-3 flex-1">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-sm font-bold">
+                          {(player.name || player).charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <span className="text-white font-medium block">
+                            {player.name || player}
+                          </span>
+                          <span className="text-gray-400 text-xs">
+                            {player.joinedAt ? new Date(player.joinedAt).toLocaleTimeString() : 'Recently joined'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-3">
+                      {/* Score */}
+                      <div className="text-right">
+                        <span className="text-white font-semibold">
+                          {gameState.scores[player.name] || 0}
+                        </span>
+                        <span className="text-gray-400 text-xs ml-1">pts</span>
+                      </div>
+                      
+                      {/* Online indicator */}
+                      <div className="w-2 h-2 bg-green-400 rounded-full" title="Online"></div>
+                      
+                      {/* Remove button - shows on hover */}
+                      <button
+                        onClick={() => removePlayer(player.name || player)}
+                        className="opacity-0 group-hover:opacity-100 transition-all duration-200 text-red-400 hover:text-red-300 hover:bg-red-500/20 p-2 rounded-full"
+                        title={`Remove ${player.name || player} from game`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-12">
+                  <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-gray-400 mb-2">No players joined yet</p>
+                  <p className="text-gray-500 text-sm">Players will appear here when they join the game</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Players info footer */}
             {gameState.players.length > 0 && (
-            <div className="flex space-x-2">
-                <Button 
-                size="sm" 
-                variant="danger" 
-                onClick={() => {
-                    if (window.confirm(`Remove ALL ${gameState.players.length} players from the game?`)) {
-                    resetGame();
-                    }
-                }}
-                title="Remove all players"
-                >
-                Clear All
-                </Button>
-            </div>
+              <div className="mt-4 pt-3 border-t border-white/10">
+                <div className="flex items-center justify-between text-sm text-gray-400">
+                  <span>
+                    Total: {gameState.players.length} player{gameState.players.length !== 1 ? 's' : ''}
+                  </span>
+                  <span>
+                    Hover to remove individual players
+                  </span>
+                </div>
+              </div>
             )}
-        </div>
-        
-        <div className="space-y-2 max-h-48 overflow-y-auto">
-            {gameState.players.length > 0 ? (
-            gameState.players.map((player, index) => (
-                <div key={player.name || index} className="flex items-center justify-between bg-white/5 rounded-lg p-3 group hover:bg-white/10 transition-colors">
-                <div className="flex items-center space-x-3 flex-1">
-                    <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-sm font-bold">
-                        {(player.name || player).charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                        <span className="text-white font-medium block">
-                        {player.name || player}
-                        </span>
-                        <span className="text-gray-400 text-xs">
-                        {player.joinedAt ? new Date(player.joinedAt).toLocaleTimeString() : 'Recently joined'}
-                        </span>
-                    </div>
-                    </div>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                    {/* Score */}
-                    <div className="text-right">
-                    <span className="text-white font-semibold">
-                        {gameState.scores[player.name] || 0}
-                    </span>
-                    <span className="text-gray-400 text-xs ml-1">pts</span>
-                    </div>
-                    
-                    {/* Online indicator */}
-                    <div className="w-2 h-2 bg-green-400 rounded-full" title="Online"></div>
-                    
-                    {/* Remove button - shows on hover */}
-                    <button
-                    onClick={() => removePlayer(player.name || player)}
-                    className="opacity-0 group-hover:opacity-100 transition-all duration-200 text-red-400 hover:text-red-300 hover:bg-red-500/20 p-2 rounded-full"
-                    title={`Remove ${player.name || player} from game`}
-                    >
-                    <Trash2 className="w-4 h-4" />
-                    </button>
-                </div>
-                </div>
-            ))
-            ) : (
-            <div className="text-center py-12">
-                <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                <p className="text-gray-400 mb-2">No players joined yet</p>
-                <p className="text-gray-500 text-sm">Players will appear here when they join the game</p>
-            </div>
-            )}
-        </div>
-        
-        {/* Players info footer */}
-        {gameState.players.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-white/10">
-            <div className="flex items-center justify-between text-sm text-gray-400">
-                <span>
-                Total: {gameState.players.length} player{gameState.players.length !== 1 ? 's' : ''}
-                </span>
-                <span>
-                Hover to remove individual players
-                </span>
-            </div>
-            </div>
-        )}
-        </Card>
+          </Card>
 
           {/* Game Control */}
           <Card>
@@ -362,6 +399,15 @@ const removePlayer = async (playerName) => {
               >
                 <Play className="w-5 h-5 mr-2" />
                 Start Game
+              </Button>
+              
+              <Button 
+                variant="danger" 
+                size="lg" 
+                className="w-full"
+                onClick={resetGame}
+              >
+                🔄 Reset Game
               </Button>
               
               {gameState.gameMode === 'playing' && (
