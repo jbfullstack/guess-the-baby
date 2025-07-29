@@ -1,5 +1,6 @@
 import Pusher from 'pusher';
 import { PlayersRedis, ScoresRedis, GameStateRedis } from '../src/services/redis.js';
+import { Octokit } from '@octokit/rest';
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID,
@@ -8,6 +9,27 @@ const pusher = new Pusher({
   cluster: process.env.PUSHER_CLUSTER,
   useTLS: true,
 });
+
+const octokit = new Octokit({
+  auth: process.env.GITHUB_TOKEN,
+});
+
+// Helper to get real names from GitHub
+async function getRealNamesFromGitHub() {
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner: process.env.GITHUB_REPO_OWNER,
+      repo: process.env.GITHUB_REPO_NAME,
+      path: 'gameData.json',
+    });
+    const gameData = JSON.parse(Buffer.from(data.content, 'base64').toString());
+    console.log('✅ Real names loaded from GitHub:', gameData.names);
+    return gameData.names || ['Alice', 'Bob', 'Charlie', 'Diana']; // Fallback to mock if no real names
+  } catch (error) {
+    console.warn('❌ Failed to load real names from GitHub:', error.message);
+    return ['Alice', 'Bob', 'Charlie', 'Diana']; // Fallback to mock names
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -48,24 +70,28 @@ export default async function handler(req, res) {
     await PlayersRedis.updateHeartbeat(newPlayer.name);
     console.log('Heartbeat updated');
 
-    // 5. Get updated data
-    const [allPlayers, allScores] = await Promise.all([
+    // 5. Get updated data + REAL NAMES
+    const [allPlayers, allScores, realNames] = await Promise.all([
       PlayersRedis.getPlayers(),
-      ScoresRedis.getScores()
+      ScoresRedis.getScores(),
+      getRealNamesFromGitHub() // NOUVEAU : Charge les vrais noms
     ]);
+    
     console.log(`Total players now: ${allPlayers.length}`);
+    console.log(`Real names loaded: ${realNames.length} names:`, realNames);
 
     // 6. Notify all clients via Pusher
     await pusher.trigger('baby-game', 'player-joined', {
       player: newPlayer,
       totalPlayers: allPlayers.length,
       allPlayers: allPlayers,
+      names: realNames, // NOUVEAU : Inclut les vrais noms
       gameState: {
         gameMode: gameState.gameMode,
         gameId: gameState.gameId
       }
     });
-    console.log('Pusher notification sent');
+    console.log('Pusher notification sent with real names');
 
     // 7. Send sync state to new player
     await pusher.trigger('baby-game', 'sync-state', {
@@ -75,11 +101,12 @@ export default async function handler(req, res) {
         gameMode: gameState.gameMode,
         gameId: gameState.gameId,
         scores: allScores,
+        names: realNames, // NOUVEAU : Inclut les vrais noms
         currentRound: parseInt(gameState.currentRound) || 0,
         currentPhoto: gameState.currentPhoto ? JSON.parse(gameState.currentPhoto) : null
       }
     });
-    console.log('Sync state sent');
+    console.log('Sync state sent with real names');
 
     const responseTime = Date.now() - startTime;
 
@@ -91,7 +118,8 @@ export default async function handler(req, res) {
       totalPlayers: allPlayers.length,
       players: allPlayers,
       scores: allScores,
-      responseTime: `${responseTime}ms` // Pour voir la différence de vitesse !
+      names: realNames, // NOUVEAU : Inclut les vrais noms dans la réponse
+      responseTime: `${responseTime}ms`
     });
 
   } catch (error) {

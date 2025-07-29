@@ -218,11 +218,26 @@ const AdminPage = () => {
     }
   };
 
-  const mockVotes = [
-    { player: 'Alice', answer: 'Bob', correct: false },
-    { player: 'Bob', answer: 'Charlie', correct: true },
-    { player: 'Charlie', answer: 'Alice', correct: false },
-  ];
+  const cleanupCorruptedVotes = async () => {
+    if (window.confirm('🧹 Clean corrupted vote data?\n\nThis will clear all current votes but keep players and game state.')) {
+        try {
+        const response = await fetch('/api/redis-cleanup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            setShuffleMessage('🧹 Vote data cleaned successfully!');
+            setTimeout(() => setShuffleMessage(''), 3000);
+        } else {
+            alert('❌ Cleanup failed: ' + result.error);
+        }
+        } catch (error) {
+        alert('❌ Cleanup failed: ' + error.message);
+        }
+    }
+    };
 
   // Get real votes from gameState
   const currentVotes = gameState.votes || {};
@@ -436,6 +451,15 @@ const AdminPage = () => {
                 >
                     🔄 Reset Game
                 </Button>
+
+                <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    className="w-full"
+                    onClick={cleanupCorruptedVotes}
+                    >
+                    🧹 Clean Vote Data
+                </Button>
                 
                 {/* LIVE VOTES SECTION - UPDATED */}
                 {gameState.gameMode === 'playing' && (
@@ -452,11 +476,16 @@ const AdminPage = () => {
                     
                     {showVotes && (
                         <div className="bg-white/5 rounded-lg p-3 space-y-1">
-                        {/* Current Round Info */}
-                        <div className="flex items-center justify-between text-xs text-gray-400 mb-2 pb-1 border-b border-white/10">
-                            <span>Round {gameState.currentRound || 1}</span>
-                            <span>{totalVotes}/{totalPlayers} voted</span>
-                        </div>
+                            {/* Debug info */}
+                            <div className="text-xs text-yellow-400 mb-1 font-mono">
+                                 Debug: {JSON.stringify(currentVotes).slice(0, 100)}...
+                            </div>
+                            
+                            {/* Current Round Info */}
+                            <div className="flex items-center justify-between text-xs text-gray-400 mb-2 pb-1 border-b border-white/10">
+                                <span>Round {gameState.currentRound || 1}</span>
+                                <span>{totalVotes}/{totalPlayers} voted</span>
+                            </div>
                         
                         {/* Real Votes Display */}
                         {displayVotes.length > 0 ? (

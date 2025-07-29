@@ -227,16 +227,20 @@ export const VotesRedis = {
       throw new Error('Player already voted this round');
     }
 
+    console.log(`[VOTES] Submitting vote: ${playerName} -> ${answer} for round ${round}`);
+
     // Submit vote and increment count atomically
     const pipeline = redis.pipeline();
     
-    // CRITICAL FIX: Store vote properly
-    pipeline.hset(voteKey, playerName, answer);
-    pipeline.hincrby(voteKey, '_votes_count', 1); // Use underscore prefix to avoid conflicts
+    // Store player vote with EXPLICIT string keys
+    pipeline.hset(voteKey, `player:${playerName}`, answer);
+    pipeline.hincrby(voteKey, 'meta:votes_count', 1);
     pipeline.expire(voteKey, 1800); // 30 minutes TTL
     
     const results = await pipeline.exec();
     const votesCount = results[1].result;
+    
+    console.log(`[VOTES] Vote stored successfully. Count: ${votesCount}`);
     
     return { votesCount, answer };
   },
@@ -244,43 +248,67 @@ export const VotesRedis = {
   // Get votes for a round
   async getRoundVotes(round) {
     const voteKey = `game:votes:round:${round}`;
-    const allData = await redis.hgetall(voteKey);
     
-    if (!allData) return { votes: {}, votesCount: 0, totalPlayers: 0 };
-    
-    // CRITICAL FIX: Separate metadata from actual votes
-    const votes = {};
-    let votesCount = 0;
-    let totalPlayers = 0;
-    
-    Object.entries(allData).forEach(([key, value]) => {
-      if (key === '_votes_count') {
-        votesCount = parseInt(value) || 0;
-      } else if (key === '_total_players') {
-        totalPlayers = parseInt(value) || 0;
-      } else if (key.startsWith('_')) {
-        // Skip other metadata fields
-        return;
-      } else {
-        // This is an actual vote
-        votes[key] = value;
+    try {
+      const allData = await redis.hgetall(voteKey);
+      
+      console.log(`[VOTES] Raw data from Redis for round ${round}:`, allData);
+      
+      if (!allData || typeof allData !== 'object') {
+        console.log(`[VOTES] No data found for round ${round}`);
+        return { votes: {}, votesCount: 0, totalPlayers: 0 };
       }
-    });
-    
-    console.log(`[VOTES DEBUG] Round ${round}:`, { votes, votesCount, totalPlayers });
-    
-    return { votes, votesCount, totalPlayers };
+      
+      // Separate votes from metadata with EXPLICIT prefixes
+      const votes = {};
+      let votesCount = 0;
+      let totalPlayers = 0;
+      
+      Object.entries(allData).forEach(([key, value]) => {
+        console.log(`[VOTES] Processing key: "${key}" = "${value}" (type: ${typeof value})`);
+        
+        if (key === 'meta:votes_count') {
+          votesCount = parseInt(value) || 0;
+        } else if (key === 'meta:total_players') {
+          totalPlayers = parseInt(value) || 0;
+        } else if (key.startsWith('player:')) {
+          // Extract player name and their vote
+          const playerName = key.replace('player:', '');
+          votes[playerName] = value;
+        } else if (key.startsWith('meta:')) {
+          // Skip other metadata
+          console.log(`[VOTES] Skipping metadata: ${key}`);
+        } else {
+          // Legacy format - try to handle old votes
+          console.warn(`[VOTES] Legacy vote format detected: ${key} = ${value}`);
+          // Only add if it looks like a real player name (not a character index)
+          if (isNaN(key) && key.length > 1) {
+            votes[key] = value;
+          }
+        }
+      });
+      
+      console.log(`[VOTES] Parsed votes for round ${round}:`, { votes, votesCount, totalPlayers });
+      
+      return { votes, votesCount, totalPlayers };
+      
+    } catch (error) {
+      console.error(`[VOTES] Error getting votes for round ${round}:`, error);
+      return { votes: {}, votesCount: 0, totalPlayers: 0 };
+    }
   },
 
   // Clear votes for a round
   async clearRoundVotes(round) {
+    console.log(`[VOTES] Clearing votes for round ${round}`);
     await redis.del(`game:votes:round:${round}`);
   },
 
   // Set total players for vote counting
   async setTotalPlayers(round, totalPlayers) {
     const voteKey = `game:votes:round:${round}`;
-    await redis.hset(voteKey, '_total_players', totalPlayers); // Use underscore prefix
+    console.log(`[VOTES] Setting total players for round ${round}: ${totalPlayers}`);
+    await redis.hset(voteKey, 'meta:total_players', totalPlayers);
     await redis.expire(voteKey, 1800);
   }
 };

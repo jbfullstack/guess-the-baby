@@ -184,94 +184,105 @@ export const GameProvider = ({ children }) => {
     }
   };
 
-  const bindPusherEvents = (channel) => {
+   const bindPusherEvents = (channel) => {
     console.log('🎯 Binding Pusher events...');
 
     channel.bind('player-joined', (data) => {
-      console.log('🎉 Player joined:', data);
-      
-      // Update all players if provided, otherwise add single player
-      if (data.allPlayers) {
+        console.log('🎉 Player joined:', data);
+        
+        // Update all players if provided, otherwise add single player
+        if (data.allPlayers) {
         dispatch({
-          type: 'SET_ALL_PLAYERS',
-          payload: data.allPlayers
+            type: 'SET_ALL_PLAYERS',
+            payload: data.allPlayers
         });
-      } else {
+        } else {
         dispatch({
-          type: 'ADD_PLAYER',
-          payload: data.player
+            type: 'ADD_PLAYER',
+            payload: data.player
         });
-      }
+        }
+
+        // NOUVEAU : Update names if provided
+        if (data.names && Array.isArray(data.names)) {
+        console.log('🏷️ Updating names from player-joined:', data.names);
+        updateGameState({ names: data.names });
+        }
     });
 
     channel.bind('game-started', (data) => {
-      console.log('🎮 Game started:', data);
-      updateGameState({
+        console.log('🎮 Game started:', data);
+        updateGameState({
         gameMode: 'playing',
         currentPhoto: data.photo,
         gameId: data.gameId,
         currentRound: data.currentRound || 1,
         selectedAnswer: null,
         votes: []
-      });
+        });
     });
 
     channel.bind('next-photo', (data) => {
-      console.log('📸 Next photo:', data);
-      updateGameState({
+        console.log('📸 Next photo:', data);
+        updateGameState({
         currentPhoto: data.photo,
         currentRound: data.round,
         selectedAnswer: null,
         votes: [],
         scores: data.scores
-      });
+        });
     });
 
     channel.bind('game-ended', (data) => {
-      console.log('🏁 Game ended:', data);
-      updateGameState({
+        console.log('🏁 Game ended:', data);
+        updateGameState({
         gameMode: 'finished',
         scores: data.finalScores
-      });
+        });
     });
 
     channel.bind('vote-update', (data) => {
-      console.log('🗳️ Vote update:', data);
-      updateGameState({ votes: data.votes });
+        console.log('🗳️ Vote update:', data);
+        updateGameState({ votes: data.votes });
     });
 
     channel.bind('round-ended', (data) => {
-      console.log('🔄 Round ended:', data);
-      updateGameState({ 
+        console.log('🔄 Round ended:', data);
+        updateGameState({ 
         scores: data.scores
-      });
+        });
     });
 
     channel.bind('sync-state', (data) => {
-      console.log('🔄 Syncing state:', data);
-      // Only apply if this is for us (or if no target specified)
-      if (!data.targetPlayer || data.targetPlayer === state.playerName) {
-        updateGameState(data.gameState);
-      }
+        console.log('🔄 Syncing state:', data);
+        // Only apply if this is for us (or if no target specified)
+        if (!data.targetPlayer || data.targetPlayer === state.playerName) {
+        // NOUVEAU : Include names in sync
+        const syncData = { ...data.gameState };
+        if (data.gameState.names) {
+            console.log('🏷️ Updating names from sync-state:', data.gameState.names);
+        }
+        updateGameState(syncData);
+        }
     });
 
     channel.bind('game-reset', (data) => {
-      console.log('🔄 Game reset:', data);
-      dispatch({ type: 'RESET_GAME' });
-      // Optionally show a message to user
-      if (data.message) {
+        console.log('🔄 Game reset:', data);
+        dispatch({ type: 'RESET_GAME' });
+        // Optionally show a message to user
+        if (data.message) {
         console.log('Game reset:', data.message);
-      }
+        }
     });
 
     channel.bind('player-left', (data) => {
-      console.log('🚪 Player left:', data);
-      updateGameState({
+        console.log('🚪 Player left:', data);
+        updateGameState({
         players: data.remainingPlayers,
         scores: data.scores
-      });
+        });
     });
-  };
+    };
 
   const loadPhotos = async () => {
     try {
@@ -369,23 +380,32 @@ export const GameProvider = ({ children }) => {
 
     // Game management
     joinGame: async (playerName) => {
-      try {
+        try {
         const result = await apiService.joinGame(playerName);
         
-        updateGameState({
-          hasJoined: true,
-          playerName,
-          gameId: result.gameId,
-          gameMode: result.gameMode,
-          players: result.players || state.players,
-          scores: result.scores || state.scores
-        });
+        // NOUVEAU : Update names from join response
+        const updateData = {
+            hasJoined: true,
+            playerName,
+            gameId: result.gameId,
+            gameMode: result.gameMode,
+            players: result.players || state.players,
+            scores: result.scores || state.scores
+        };
+
+        // Include real names if provided
+        if (result.names && Array.isArray(result.names)) {
+            console.log('🏷️ Updating names from join response:', result.names);
+            updateData.names = result.names;
+        }
+
+        updateGameState(updateData);
 
         return result;
-      } catch (error) {
+        } catch (error) {
         console.error('Failed to join game:', error);
         throw error;
-      }
+        }
     },
 
     startGame: async (settings) => {

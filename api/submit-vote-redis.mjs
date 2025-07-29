@@ -1,5 +1,6 @@
 import Pusher from 'pusher';
 import { GameStateRedis, VotesRedis, ScoresRedis, PlayersRedis } from '../src/services/redis.js';
+import redis from '../src/services/redis.js';
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID,
@@ -22,6 +23,8 @@ export default async function handler(req, res) {
     if (!playerName || !answer) {
       return res.status(400).json({ error: 'Player name and answer are required' });
     }
+
+    console.log(`[VOTE] Processing vote: ${playerName} -> ${answer}`);
 
     // 1. Get current game state from Redis
     const gameState = await GameStateRedis.getCurrentGame();
@@ -52,31 +55,45 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid game state - no photo for current round' });
     }
 
-    console.log(`[DEBUG] Processing vote for round ${currentRound}, photo: ${currentPhoto.person}, answer: ${answer}`);
+    console.log(`[VOTE] Processing vote for round ${currentRound}, photo: ${currentPhoto.person}, answer: ${answer}`);
 
-    // 2. Submit vote (ATOMIC - no race conditions!)
+    // 2. Check if player already voted using NEW format with prefix
+    const voteKey = `game:votes:round:${currentRound}`;
+    const existingVote = await redis.hget(voteKey, `player:${playerName}`);
+    if (existingVote) {
+      console.log(`[VOTE] Player ${playerName} already voted: ${existingVote}`);
+      return res.status(400).json({ error: 'Player already voted this round' });
+    }
+
+    // 3. Submit vote using VotesRedis service (which now uses prefixes)
     const { votesCount } = await VotesRedis.submitVote(currentRound, playerName, answer);
 
-    // 3. Check if answer is correct and update score
+    // 4. Check if answer is correct and update score
     // UPDATED: Handle NO_ANSWER case
     let isCorrect = false;
     if (answer !== 'NO_ANSWER') {
       isCorrect = answer === currentPhoto.person;
       if (isCorrect) {
         await ScoresRedis.incrementScore(playerName, 1);
+        console.log(`[VOTE] ✅ Correct answer! ${playerName} gets a point.`);
+      } else {
+        console.log(`[VOTE] ❌ Wrong answer. Correct: ${currentPhoto.person}, Got: ${answer}`);
       }
+    } else {
+      console.log(`[VOTE] ⏰ Timer expired for ${playerName} - no points awarded`);
     }
-    // NO_ANSWER doesn't get points but still counts as a vote
 
-    // 4. Update player heartbeat
+    // 5. Update player heartbeat
     await PlayersRedis.updateHeartbeat(playerName);
 
-    // 5. Get current vote status
+    // 6. Get current vote status using NEW format
     const { votes } = await VotesRedis.getRoundVotes(currentRound);
     const players = await PlayersRedis.getPlayers();
     const allPlayersVoted = votesCount >= players.length;
 
-    // 6. Emit vote update
+    console.log(`[VOTE] Vote submitted. Votes: ${JSON.stringify(votes)}, Count: ${votesCount}/${players.length}`);
+
+    // 7. Emit vote update
     await pusher.trigger('baby-game', 'vote-update', {
       votes: votes,
       votesCount: votesCount,
@@ -85,8 +102,10 @@ export default async function handler(req, res) {
       round: currentRound
     });
 
-    // 7. If all players voted, handle round completion
+    // 8. If all players voted, handle round completion
     if (allPlayersVoted) {
+      console.log(`[VOTE] 🎯 All players voted! Processing round completion...`);
+      
       const scores = await ScoresRedis.getScores();
       
       // Show round results
@@ -102,6 +121,8 @@ export default async function handler(req, res) {
       setTimeout(async () => {
         try {
           if (currentRound >= selectedPhotos.length) {
+            console.log(`[VOTE] 🏁 Game finished! Final round: ${currentRound}/${selectedPhotos.length}`);
+            
             // Game finished - save to GitHub history (async)
             await saveGameToGitHubHistory(gameState, scores);
             
@@ -116,10 +137,14 @@ export default async function handler(req, res) {
               winner: winner,
               totalRounds: selectedPhotos.length
             });
+            
+            console.log(`[VOTE] 🏆 Game ended. Winner: ${winner}`);
           } else {
             // Next photo
             const nextRound = currentRound + 1;
             const nextPhoto = selectedPhotos[nextRound - 1];
+            
+            console.log(`[VOTE] ➡️ Moving to round ${nextRound}: ${nextPhoto.person}`);
             
             // Update game state
             await GameStateRedis.updateGameField('currentRound', nextRound);
@@ -142,7 +167,7 @@ export default async function handler(req, res) {
             });
           }
         } catch (error) {
-          console.error('Error in round completion:', error);
+          console.error('[VOTE] Error in round completion:', error);
         }
       }, 3000);
     }
@@ -161,7 +186,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Submit vote error:', error);
+    console.error('[VOTE] Submit vote error:', error);
     
     // Handle specific errors
     if (error.message.includes('already voted')) {
@@ -174,7 +199,6 @@ export default async function handler(req, res) {
     });
   }
 }
-
 
 // Helper function to save completed game to GitHub (async)
 async function saveGameToGitHubHistory(gameState, scores) {
@@ -198,6 +222,7 @@ async function saveGameToGitHubHistory(gameState, scores) {
       history = JSON.parse(Buffer.from(data.content, 'base64').toString());
     } catch (error) {
       // File doesn't exist yet
+      console.log('[HISTORY] Creating new gameHistory.json file');
     }
 
     // Add current game to history
@@ -241,9 +266,9 @@ async function saveGameToGitHubHistory(gameState, scores) {
       sha
     });
 
-    console.log('Game saved to GitHub history successfully');
+    console.log('[HISTORY] ✅ Game saved to GitHub history successfully');
   } catch (error) {
-    console.error('Failed to save game to GitHub history:', error);
+    console.error('[HISTORY] ❌ Failed to save game to GitHub history:', error);
     // Don't throw - this is async and shouldn't break the game
   }
 }
