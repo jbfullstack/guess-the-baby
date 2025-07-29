@@ -113,12 +113,32 @@ export default async function handler(req, res) {
       }
     });
 
+    // Send current game state to the new player specifically
+    await pusher.trigger('baby-game', 'sync-state', {
+      targetPlayer: newPlayer.name,
+      gameState: {
+        players: gameState.players,
+        gameMode: gameState.gameMode,
+        gameId: gameState.gameId,
+        scores: gameState.scores,
+        currentRound: gameState.currentRound,
+        currentPhoto: gameState.gameMode === 'playing' && gameState.selectedPhotos[gameState.currentRound - 1] 
+          ? {
+              id: gameState.selectedPhotos[gameState.currentRound - 1].id,
+              url: gameState.selectedPhotos[gameState.currentRound - 1].url
+            }
+          : null
+      }
+    });
+
     res.json({ 
       success: true,
       message: 'Joined game successfully',
       gameId: gameState.gameId,
       gameMode: gameState.gameMode,
-      totalPlayers: gameState.players.length
+      totalPlayers: gameState.players.length,
+      players: gameState.players,
+      scores: gameState.scores
     });
 
   } catch (error) {

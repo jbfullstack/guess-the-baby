@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
-   "repository": {
+  "repository": {
     "type": "git",
     "url": "git+https://github.com/jbfullstack/guess-the-baby.git"
   },
@@ -21,14 +21,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "pusher-js": "^8.4.0-beta",
+    "@octokit/rest": "^20.0.2",
+    "@upstash/redis": "^1.35.2",
+    "formidable": "^3.5.1",
     "framer-motion": "^10.16.16",
     "lucide-react": "^0.263.1",
-    "@octokit/rest": "^20.0.2",
     "pusher": "^5.2.0",
-    "formidable": "^3.5.1"
+    "pusher-js": "^8.4.0-beta",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

@@ -64,25 +64,36 @@ class ApiService {
     return this.call('delete-photo', { photoId }, 'DELETE');
   }
 
-  // Game-specific API calls
+  // Game-specific API calls (REDIS-POWERED!)
   async joinGame(playerName) {
-    return this.call('join-game', { playerName }, 'POST');
+    return this.call('join-game-redis', { playerName }, 'POST');
   }
 
   async startGame(settings) {
-    return this.call('start-game', settings, 'POST');
+    return this.call('start-game-redis', settings, 'POST');
   }
 
   async submitVote(gameId, playerName, answer) {
-    return this.call('submit-vote', { gameId, playerName, answer }, 'POST');
+    return this.call('submit-vote-redis', { gameId, playerName, answer }, 'POST');
   }
 
   async getGameHistory() {
     return this.call('game-history');
   }
 
+  // Get complete game state for recovery (REDIS-POWERED!)
   async getGameState() {
-    return this.call('game-state');
+    return this.call('get-game-state-redis');
+  }
+
+  // Reset game (REDIS-POWERED!)
+  async resetGame(resetType = 'hard') {
+    return this.call('reset-game-redis', { resetType }, 'POST');
+  }
+
+  // NEW: Test Redis connection
+  async testRedis() {
+    return this.call('redis-test');
   }
 }
 
