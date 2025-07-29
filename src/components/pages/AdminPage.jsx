@@ -3,7 +3,7 @@ import { Play, Settings, Users, Image, Check, X, Shuffle, Eye, EyeOff, Edit3, Tr
 import { useGame } from '../../hooks/useGame';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
-import Pusher from 'pusher-js';
+import Pusher from 'pusher-js'; // NOUVEAU: Import Pusher
 
 const AdminPage = () => {
   const { gameState, actions } = useGame();
@@ -14,36 +14,23 @@ const AdminPage = () => {
   const [photoOrder, setPhotoOrder] = useState([]);
   const [editingPhoto, setEditingPhoto] = useState(null);
   const [editName, setEditName] = useState('');
-
-const [liveVotes, setLiveVotes] = useState({});
+  
+  // NOUVEAU: États pour les votes en temps réel
+  const [liveVotes, setLiveVotes] = useState({});
   const [liveVoteCount, setLiveVoteCount] = useState(0);
   const [liveTotalPlayers, setLiveTotalPlayers] = useState(0);
-
   
   // Use real photos from gameState instead of mock data
   const allPhotos = gameState.photos;
 
+  // NOUVEAU: Setup Pusher pour admin
   useEffect(() => {
-    // Load photos from backend when component mounts
-    actions.refreshPhotos();
-  }, []);
-
-  useEffect(() => {
-    // Initialize with default order when photos are loaded
-    if (allPhotos.length > 0) {
-      setPhotoOrder([...allPhotos]);
-      // Select all photos by default
-      setSelectedPhotos(allPhotos.map(photo => photo.id));
-    }
-  }, [allPhotos]);
-
-   useEffect(() => {
     let pusher = null;
     let channel = null;
 
     const setupAdminPusher = () => {
       try {
-        console.log('[ADMIN] Setting up Pusher connection...');
+        console.log('[ADMIN] 🚀 Setting up Pusher connection...');
         
         pusher = new Pusher('c9eb0b76bcbe61c6a397', {
           cluster: 'eu',
@@ -100,6 +87,46 @@ const [liveVotes, setLiveVotes] = useState({});
       }
     };
   }, []);
+
+  useEffect(() => {
+    // Load photos from backend when component mounts
+    actions.refreshPhotos();
+  }, []);
+
+  useEffect(() => {
+    // Initialize with default order when photos are loaded
+    if (allPhotos.length > 0) {
+      setPhotoOrder([...allPhotos]);
+      // Select all photos by default
+      setSelectedPhotos(allPhotos.map(photo => photo.id));
+    }
+  }, [allPhotos]);
+
+  // NOUVEAU: Fonction pour obtenir les votes actuels (combinant gameState et live)
+  const getCurrentVotes = () => {
+    // Priorité aux votes live, fallback sur gameState
+    const currentVotes = Object.keys(liveVotes).length > 0 ? liveVotes : (gameState.votes || {});
+    
+    // Convert votes object to array for display
+    const votesArray = Object.entries(currentVotes).map(([player, answer]) => ({
+      player,
+      answer,
+      correct: null // We don't know correct answer during voting
+    }));
+    
+    console.log('[ADMIN] Current votes:', { 
+      liveVotes, 
+      gameStateVotes: gameState.votes, 
+      finalVotes: currentVotes, 
+      votesArray 
+    });
+    
+    return votesArray;
+  };
+
+  const displayVotes = getCurrentVotes();
+  const totalVotes = Object.keys(liveVotes).length > 0 ? liveVoteCount : displayVotes.length;
+  const totalPlayers = liveTotalPlayers > 0 ? liveTotalPlayers : gameState.players.length;
 
   // PLAYER MANAGEMENT FUNCTIONS
   const removePlayer = async (playerName) => {
@@ -166,6 +193,30 @@ const [liveVotes, setLiveVotes] = useState({});
         setTimeout(() => setShuffleMessage(''), 3000);
       } catch (error) {
         alert('Failed to reset game: ' + error.message);
+      }
+    }
+  };
+
+  // NOUVEAU: Fonction pour nettoyer les votes corrompus
+  const cleanupCorruptedVotes = async () => {
+    if (window.confirm('🧹 Clean corrupted vote data?\n\nThis will clear all current votes but keep players and game state.')) {
+      try {
+        const response = await fetch('/api/redis-cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+          setShuffleMessage('🧹 Vote data cleaned successfully!');
+          setLiveVotes({});
+          setLiveVoteCount(0);
+          setTimeout(() => setShuffleMessage(''), 3000);
+        } else {
+          alert('❌ Cleanup failed: ' + result.error);
+        }
+      } catch (error) {
+        alert('❌ Cleanup failed: ' + error.message);
       }
     }
   };
@@ -288,62 +339,6 @@ const [liveVotes, setLiveVotes] = useState({});
     }
   };
 
-   const cleanupCorruptedVotes = async () => {
-    if (window.confirm('🧹 Clean corrupted vote data?\n\nThis will clear all current votes but keep players and game state.')) {
-      try {
-        const response = await fetch('/api/redis-cleanup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-          setShuffleMessage('🧹 Vote data cleaned successfully!');
-          setLiveVotes({});
-          setLiveVoteCount(0);
-          setTimeout(() => setShuffleMessage(''), 3000);
-        } else {
-          alert('❌ Cleanup failed: ' + result.error);
-        }
-      } catch (error) {
-        alert('❌ Cleanup failed: ' + error.message);
-      }
-    }
-  };
-
-  // Get real votes from gameState
-  const currentVotes = gameState.votes || {};
-  const votesArray = Object.entries(currentVotes).map(([player, answer]) => ({
-    player,
-    answer,
-    correct: false // We don't know the correct answer on admin side during voting
-  }));
-
-   const getCurrentVotes = () => {
-    // Priorité aux votes live, fallback sur gameState
-    const currentVotes = Object.keys(liveVotes).length > 0 ? liveVotes : (gameState.votes || {});
-    
-    // Convert votes object to array for display
-    const votesArray = Object.entries(currentVotes).map(([player, answer]) => ({
-      player,
-      answer,
-      correct: null // We don't know correct answer during voting
-    }));
-    
-    console.log('[ADMIN] Current votes:', { 
-      liveVotes, 
-      gameStateVotes: gameState.votes, 
-      finalVotes: currentVotes, 
-      votesArray 
-    });
-    
-    return votesArray;
-  };
-
-  const displayVotes = getCurrentVotes();
-  const totalVotes = Object.keys(liveVotes).length > 0 ? liveVoteCount : displayVotes.length;
-  const totalPlayers = liveTotalPlayers > 0 ? liveTotalPlayers : gameState.players.length;
-
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -356,7 +351,7 @@ const [liveVotes, setLiveVotes] = useState({});
               <p className="text-gray-300">Manage your baby photo guessing game</p>
             </div>
             <div className="flex space-x-2">
-              {/* Debug info */}
+              {/* NOUVEAU: Debug info */}
               <div className="text-xs text-gray-400">
                 Live: {totalVotes}/{totalPlayers}
               </div>
@@ -561,9 +556,9 @@ const [liveVotes, setLiveVotes] = useState({});
                   
                   {showVotes && (
                     <div className="bg-white/5 rounded-lg p-3 space-y-1">
-                      {/* Debug info - NOUVEAU */}
+                      {/* NOUVEAU: Debug info */}
                       <div className="text-xs text-yellow-400 mb-2 font-mono bg-black/20 p-1 rounded">
-                        Debug: Live={Object.keys(liveVotes).length} | State={Object.keys(gameState.votes || {}).length}
+                        Debug: Live={Object.keys(liveVotes).length} | State={Object.keys(gameState.votes || {}).length} | Count={totalVotes}/{totalPlayers}
                       </div>
                       
                       {/* Current Round Info */}
@@ -637,28 +632,6 @@ const [liveVotes, setLiveVotes] = useState({});
               )}
             </div>
           </Card>
-
-            <Button 
-                variant="danger" 
-                size="sm" 
-                className="w-full"
-                onClick={async () => {
-                    if (window.confirm('⚠️ CLEANUP: This will force-clear ALL Redis data including corrupted entries. Use if game is broken. Continue?')) {
-                    try {
-                        const response = await fetch('/api/redis-cleanup', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                        });
-                        const result = await response.json();
-                        alert('✅ Redis cleanup completed successfully!');
-                    } catch (error) {
-                        alert('❌ Cleanup failed: ' + error.message);
-                    }
-                    }
-                }}
-                >
-                🧹 Emergency Cleanup
-            </Button>
         </div>
 
         {/* Photo Selection */}
@@ -833,7 +806,7 @@ const [liveVotes, setLiveVotes] = useState({});
                   ) : (
                     <div>
                       <p className="text-white text-xs font-medium">{photo.person}</p>
-                      {/* <p className="text-gray-300 text-xs">by {photo.uploadedBy}</p> */}
+                      <p className="text-gray-300 text-xs">by {photo.uploadedBy}</p>
                     </div>
                   )}
                 </div>
