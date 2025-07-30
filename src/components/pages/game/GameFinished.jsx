@@ -7,8 +7,8 @@ const GameFinished = ({ gameState, gameResult, onViewHistory, onLeaveGame }) => 
   const winner = gameResult?.winner || 'Unknown';
   const finalScores = gameResult?.finalScores || gameState.scores || {};
   const sortedPlayers = Object.entries(finalScores)
-    .sort(([,a], [,b]) => b - a)
-    .slice(0, 5); // Top 5
+    .sort(([,a], [,b]) => b - a);
+    // .slice(0, 5); // Top 5
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -70,18 +70,9 @@ const GameFinished = ({ gameState, gameResult, onViewHistory, onLeaveGame }) => 
               className="flex-1"
             >
               <Play className="w-4 h-4 mr-2" />
-              Play Again
+              Leave Game
             </Button>
           </div>
-          
-          <Button 
-            variant="outline" 
-            onClick={onLeaveGame}
-            className="w-full"
-          >
-            <X className="w-4 h-4 mr-2" />
-            Leave Game
-          </Button>
         </div>
       </Card>
     </div>
