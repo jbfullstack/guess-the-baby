@@ -1,56 +1,193 @@
-// Redis service for real-time game state
+// Redis service for real-time game state - FIXED UPSTASH BUG
 import { Redis } from '@upstash/redis';
 
 // Initialize Redis client
 const redis = Redis.fromEnv();
 
-// Game state management
+// Game state management - FIX: Use individual keys instead of corrupted hashes
 export const GameStateRedis = {
-  // Get current game state
+  // Get current game state - FIXED: Use separate keys to avoid Upstash hash corruption
   async getCurrentGame() {
-    const gameState = await redis.hgetall('game:current');
-    return gameState || {
-      gameId: null,
-      gameMode: 'waiting',
-      currentRound: 0,
-      currentPhoto: null,
-      totalPhotos: 0,
-      startTime: null
-    };
-  },
+    try {
+      console.log('[REDIS] Getting current game state with separate keys...');
+      
+      // Use individual keys instead of hgetall to avoid corruption
+      const [
+        gameId,
+        gameMode,
+        currentRound,
+        currentPhoto,
+        totalPhotos,
+        startTime,
+        selectedPhotos,
+        settings,
+        roundStartTime,
+        winner,
+        endedAt
+      ] = await Promise.all([
+        redis.get('game:id'),
+        redis.get('game:mode'),
+        redis.get('game:round'),  
+        redis.get('game:photo'),
+        redis.get('game:total'),
+        redis.get('game:start'),
+        redis.get('game:photos'),
+        redis.get('game:settings'),
+        redis.get('game:roundstart'),
+        redis.get('game:winner'),
+        redis.get('game:ended')
+      ]);
 
-  // Set game state
-  async setCurrentGame(gameState) {
-    // Set TTL to 2 hours
-    await redis.hset('game:current', gameState);
-    await redis.expire('game:current', 7200);
-    return gameState;
-  },
+      console.log('[REDIS] Raw values:', {
+        gameId, gameMode, currentRound, totalPhotos
+      });
 
-  // Update specific game field
-  async updateGameField(field, value) {
-    // Store value as-is if it's already a string, otherwise stringify
-    const finalValue = typeof value === 'string' ? value : JSON.stringify(value);
-    await redis.hset('game:current', field, finalValue);
-    return value;
-  },
+      const gameState = {
+        gameId: gameId || null,
+        gameMode: gameMode || 'waiting',
+        currentRound: parseInt(currentRound) || 0,
+        currentPhoto: currentPhoto ? JSON.parse(currentPhoto) : null,
+        totalPhotos: parseInt(totalPhotos) || 0,
+        startTime: startTime || null,
+        selectedPhotos: selectedPhotos ? JSON.parse(selectedPhotos) : [],
+        settings: settings ? JSON.parse(settings) : { timePerPhoto: 10 },
+        roundStartTime: roundStartTime || null,
+        winner: winner || null,
+        endedAt: endedAt || null
+      };
 
-  // Reset game
-  async resetGame() {
-    const pipeline = redis.pipeline();
-    pipeline.del('game:current');
-    pipeline.del('game:players');
-    pipeline.del('game:scores');
-    // Delete all vote rounds
-    for (let i = 1; i <= 20; i++) {
-      pipeline.del(`game:votes:round:${i}`);
+      console.log('[REDIS] ✅ Parsed game state:', gameState);
+      return gameState;
+      
+    } catch (error) {
+      console.error('[REDIS] Error getting game state:', error);
+      return {
+        gameId: null,
+        gameMode: 'waiting',
+        currentRound: 0,
+        currentPhoto: null,
+        totalPhotos: 0,
+        startTime: null,
+        selectedPhotos: [],
+        settings: { timePerPhoto: 10 }
+      };
     }
-    await pipeline.exec();
-    return { success: true };
+  },
+
+  // Set game state - FIXED: Use individual keys
+  async setCurrentGame(gameState) {
+    try {
+      console.log('[REDIS] Setting game state with separate keys...');
+      
+      const pipeline = redis.pipeline();
+      
+      // Store each field separately to avoid hash corruption
+      if (gameState.gameId !== undefined) pipeline.set('game:id', gameState.gameId, { ex: 7200 });
+      if (gameState.gameMode !== undefined) pipeline.set('game:mode', gameState.gameMode, { ex: 7200 });
+      if (gameState.currentRound !== undefined) pipeline.set('game:round', gameState.currentRound.toString(), { ex: 7200 });
+      if (gameState.currentPhoto !== undefined) pipeline.set('game:photo', JSON.stringify(gameState.currentPhoto), { ex: 7200 });
+      if (gameState.totalPhotos !== undefined) pipeline.set('game:total', gameState.totalPhotos.toString(), { ex: 7200 });
+      if (gameState.startTime !== undefined) pipeline.set('game:start', gameState.startTime, { ex: 7200 });
+      if (gameState.selectedPhotos !== undefined) pipeline.set('game:photos', JSON.stringify(gameState.selectedPhotos), { ex: 7200 });
+      if (gameState.settings !== undefined) pipeline.set('game:settings', JSON.stringify(gameState.settings), { ex: 7200 });
+      if (gameState.roundStartTime !== undefined) pipeline.set('game:roundstart', gameState.roundStartTime.toString(), { ex: 7200 });
+      if (gameState.winner !== undefined) pipeline.set('game:winner', gameState.winner, { ex: 7200 });
+      if (gameState.endedAt !== undefined) pipeline.set('game:ended', gameState.endedAt, { ex: 7200 });
+
+      await pipeline.exec();
+      console.log('[REDIS] ✅ Game state set successfully');
+      return gameState;
+      
+    } catch (error) {
+      console.error('[REDIS] Error setting game state:', error);
+      throw error;
+    }
+  },
+
+  // Update specific game field - FIXED: Use individual keys
+  async updateGameField(field, value) {
+    try {
+      const keyMap = {
+        gameId: 'game:id',
+        gameMode: 'game:mode', 
+        currentRound: 'game:round',
+        currentPhoto: 'game:photo',
+        totalPhotos: 'game:total',
+        startTime: 'game:start',
+        selectedPhotos: 'game:photos',
+        settings: 'game:settings',
+        roundStartTime: 'game:roundstart',
+        winner: 'game:winner',
+        endedAt: 'game:ended'
+      };
+
+      const redisKey = keyMap[field];
+      if (!redisKey) {
+        throw new Error(`Unknown field: ${field}`);
+      }
+
+      // Store value appropriately
+      let finalValue = value;
+      if (typeof value === 'object' && value !== null) {
+        finalValue = JSON.stringify(value);
+      } else if (typeof value !== 'string') {
+        finalValue = value.toString();
+      }
+
+      await redis.set(redisKey, finalValue, { ex: 7200 });
+      console.log(`[REDIS] ✅ Updated ${field} = ${finalValue}`);
+      return value;
+      
+    } catch (error) {
+      console.error(`[REDIS] Error updating field ${field}:`, error);
+      throw error;
+    }
+  },
+
+  // Reset game - FIXED: Delete individual keys
+  async resetGame() {
+    try {
+      console.log('[REDIS] 🧹 Resetting game with individual key cleanup...');
+      
+      const keysToDelete = [
+        'game:id', 'game:mode', 'game:round', 'game:photo', 'game:total',
+        'game:start', 'game:photos', 'game:settings', 'game:roundstart',
+        'game:winner', 'game:ended'
+      ];
+
+      const pipeline = redis.pipeline();
+      
+      // Delete game state keys
+      keysToDelete.forEach(key => pipeline.del(key));
+      
+      // Delete related data
+      pipeline.del('game:players');
+      pipeline.del('game:scores');
+      
+      // Delete all vote rounds
+      for (let i = 1; i <= 20; i++) {
+        pipeline.del(`vote:r${i}:count`);
+        pipeline.del(`vote:r${i}:total`);
+      }
+      
+      // Delete all vote player keys (pattern deletion)
+      const voteKeys = await redis.keys('vote:r*:player:*');
+      if (voteKeys && voteKeys.length > 0) {
+        voteKeys.forEach(key => pipeline.del(key));
+      }
+      
+      await pipeline.exec();
+      console.log('[REDIS] ✅ Game reset completed');
+      return { success: true };
+      
+    } catch (error) {
+      console.error('[REDIS] Error resetting game:', error);
+      throw error;
+    }
   }
 };
 
-// Players management
+// Keep the rest of the Redis services unchanged
 export const PlayersRedis = {
   // Get all players
   async getPlayers() {
@@ -214,7 +351,6 @@ export const ScoresRedis = {
     }, {});
   }
 };
-
 
 export const VotesRedis = {
   // Submit vote - AVEC KEYS SÉPARÉES
