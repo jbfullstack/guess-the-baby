@@ -7,7 +7,7 @@ import ConnectionStatus from './components/layout/ConnectionStatus';
 // Import all pages
 import HomePage from './components/pages/HomePage';
 import UploadPage from './components/pages/UploadPage';
-import GamePage from './components/pages/GamePage';
+import GamePage from './components/pages/game/GamePage';
 import AdminPage from './components/pages/AdminPage';
 import AdminAuth from './components/pages/AdminAuth';
 import HistoryPage from './components/pages/HistoryPage';

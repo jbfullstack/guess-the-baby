@@ -1,6 +1,5 @@
 import Pusher from 'pusher';
 import { GameStateRedis, VotesRedis, ScoresRedis, PlayersRedis } from '../src/services/redis.js';
-import redis from '../src/services/redis.js';
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID,
@@ -114,8 +113,8 @@ export default async function handler(req, res) {
       
       if (isCorrect) {
         // Calculer le temps de réponse (approximatif basé sur timestamp)
-        const gameStartTime = parseInt(gameState.startTime) || Date.now();
-        const answerTime = Date.now() - gameStartTime;
+        const roundStartTime = parseInt(gameState.roundStartTime) || Date.now();
+        const answerTime = Date.now() - roundStartTime;
         const totalTime = gameSettings?.timePerPhoto * 1000 || 10000; // 10 sec default
         
         // Tracker de l'ordre des bonnes réponses
@@ -189,34 +188,45 @@ export default async function handler(req, res) {
 
       console.log(`[VOTE] 📤 Round results sent via Pusher`);
 
-      // IMMEDIATE PROGRESSION (no setTimeout in serverless)
+      // IMMEDIATE PROGRESSION (no setTimeout in serverless) - FIXED LOGIC
       try {
         console.log(`[VOTE] 🚀 Immediate round progression check...`);
         console.log(`[VOTE] Current round: ${currentRound}, Total photos: ${selectedPhotos.length}`);
         
+        // FIX: Vérifier si c'est le dernier round AVANT de passer au suivant
         if (currentRound >= selectedPhotos.length) {
           console.log(`[VOTE] 🏁 Game finished! Final round: ${currentRound}/${selectedPhotos.length}`);
           
-          // Game finished - save to GitHub history (async)
-          saveGameToGitHubHistory(gameState, scores).catch(err => 
+          // Calculate final results
+          const sortedScores = Object.entries(scores).sort(([,a], [,b]) => b - a);
+          const winner = sortedScores[0]?.[0] || 'Unknown';
+          
+          // Save to GitHub history (async) - NON-BLOCKING
+          saveGameToGitHubHistory(gameState, scores, selectedPhotos.length).catch(err => 
             console.error('[VOTE] History save failed:', err)
           );
           
           // Update game state to finished
           await GameStateRedis.updateGameField('gameMode', 'finished');
-
-          const winner = Object.entries(scores)
-            .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown';
+          await GameStateRedis.updateGameField('winner', winner);
+          await GameStateRedis.updateGameField('endedAt', new Date().toISOString());
 
           // Send game end event with delay instruction
           await pusher.trigger('baby-game', 'game-ended', {
             finalScores: scores,
             winner: winner,
             totalRounds: selectedPhotos.length,
+            gameId: gameState.gameId,
+            playedRounds: currentRound,
             showDelay: 3000 // Tell clients to show results after 3 seconds
           });
           
-          console.log(`[VOTE] 🏆 Game ended. Winner: ${winner}`);
+          console.log(`[VOTE] 🏆 Game ended. Winner: ${winner}, Final Scores:`, scores);
+
+          // Clean up answer order for finished game
+          correctAnswerOrder.clear();
+          console.log(`[VOTE] 🧹 Cleaned all answer order data for finished game`);
+          
         } else {
           // Next photo logic - IMMEDIATE
           const nextRound = currentRound + 1;
@@ -235,6 +245,8 @@ export default async function handler(req, res) {
             id: nextPhoto.id,
             url: nextPhoto.url
           }));
+          // Update round start time for accurate scoring
+          await GameStateRedis.updateGameField('roundStartTime', Date.now().toString());
           
           // Clear previous round votes
           await VotesRedis.clearRoundVotes(currentRound);
@@ -312,9 +324,7 @@ export default async function handler(req, res) {
 }
 
 // Helper function to save completed game to GitHub (async)
-async function saveGameToGitHubHistory(gameState, scores) {
-  // Only save to GitHub for permanent history
-  // This is async and doesn't block the game flow
+async function saveGameToGitHubHistory(gameState, scores, totalRounds) {
   try {
     const { Octokit } = await import('@octokit/rest');
     
@@ -332,24 +342,24 @@ async function saveGameToGitHubHistory(gameState, scores) {
       });
       history = JSON.parse(Buffer.from(data.content, 'base64').toString());
     } catch (error) {
-      // File doesn't exist yet
       console.log('[HISTORY] Creating new gameHistory.json file');
     }
+
+    // Calculate winner
+    const sortedScores = Object.entries(scores).sort(([,a], [,b]) => b - a);
+    const winner = sortedScores[0]?.[0] || 'Unknown';
 
     // Add current game to history
     const gameRecord = {
       id: gameState.gameId,
-      date: gameState.startedAt,
-      players: Object.entries(scores).map(([name, score]) => ({
-        name,
-        score
-      })),
-      winner: Object.entries(scores)
-        .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown',
-      totalRounds: JSON.parse(gameState.selectedPhotos || '[]').length,
+      date: gameState.startedAt || new Date().toISOString(),
+      endedAt: new Date().toISOString(),
+      players: sortedScores.map(([name, score]) => ({ name, score })),
+      winner: winner,
+      totalRounds: totalRounds,
       duration: calculateDuration(gameState.startedAt),
-      photosUsed: JSON.parse(gameState.selectedPhotos || '[]').length,
-      settings: JSON.parse(gameState.settings || '{}')
+      photosUsed: totalRounds,
+      settings: JSON.parse(gameState.settings || '{"timePerPhoto": 10}')
     };
 
     history.unshift(gameRecord);
@@ -372,7 +382,7 @@ async function saveGameToGitHubHistory(gameState, scores) {
       owner: process.env.GITHUB_REPO_OWNER,
       repo: process.env.GITHUB_REPO_NAME,
       path: 'gameHistory.json',
-      message: 'Add game to history',
+      message: `Add game ${gameState.gameId} to history - Winner: ${winner}`,
       content: Buffer.from(JSON.stringify(history, null, 2)).toString('base64'),
       sha
     });
@@ -385,7 +395,9 @@ async function saveGameToGitHubHistory(gameState, scores) {
 }
 
 function calculateDuration(startTime) {
+  if (!startTime) return 'Unknown';
   const duration = Date.now() - new Date(startTime).getTime();
   const minutes = Math.floor(duration / 60000);
-  return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+  const seconds = Math.floor((duration % 60000) / 1000);
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
