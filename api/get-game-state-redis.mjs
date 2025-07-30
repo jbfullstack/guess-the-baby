@@ -13,6 +13,57 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
+    // 🎯 NEW: Check if this is a history-only request
+    const { historyOnly } = req.query;
+    
+    if (historyOnly === 'true') {
+      // Return ONLY formatted history for HistoryPage
+      console.log('📖 History-only request detected');
+      
+      const historyData = await getHistoryFromGitHub();
+      
+      // Format data to match HistoryPage expectations
+      const formattedHistory = historyData.map(game => ({
+        gameId: game.id?.toString() || game.gameId || 'unknown',
+        id: game.id || game.gameId,
+        date: game.date || game.endedAt,
+        endedAt: game.endedAt || game.date,
+        startTime: game.startTime || null,
+        players: game.players || [],
+        winner: game.winner || 'Unknown',
+        totalRounds: game.totalRounds || game.photosUsed || 0,
+        totalPhotos: game.photosUsed || game.totalRounds || 0,
+        photosUsed: game.photosUsed || game.totalRounds || 0,
+        duration: game.duration || 'Unknown',
+        settings: game.settings || { timePerPhoto: 10 },
+        finalScores: game.players ? 
+          game.players.reduce((acc, player) => {
+            acc[player.name] = player.score;
+            return acc;
+          }, {}) : {}
+      }));
+
+      // Sort by date (most recent first)
+      formattedHistory.sort((a, b) => {
+        const dateA = new Date(a.endedAt || a.date);
+        const dateB = new Date(b.endedAt || b.date);
+        return dateB - dateA;
+      });
+
+      const responseTime = Date.now() - startTime;
+
+      return res.json({
+        success: true,
+        history: formattedHistory,
+        count: formattedHistory.length,
+        responseTime: `${responseTime}ms`,
+        dataSource: 'GitHub gameHistory.json'
+      });
+    }
+
+    // 🔄 EXISTING FUNCTIONALITY: Full game state recovery (unchanged)
+    console.log('🔄 Full game state request');
+
     // 1. Get real-time data from Redis (FAST!)
     const [gameState, players, scores] = await Promise.all([
       GameStateRedis.getCurrentGame(),
@@ -77,7 +128,7 @@ export default async function handler(req, res) {
 
     const responseTime = Date.now() - startTime;
 
-    // 5. Return complete state for recovery
+    // 5. Return complete state for recovery (UNCHANGED)
     res.json({
       success: true,
       responseTime: `${responseTime}ms`,
@@ -107,14 +158,23 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Get game state error:', error);
+    
+    const responseTime = Date.now() - startTime;
+    
     res.status(500).json({ 
       error: error.message,
-      responseTime: `${Date.now() - startTime}ms`
+      responseTime: `${responseTime}ms`,
+      // Fallback for history-only requests
+      ...(req.query.historyOnly === 'true' && {
+        success: false,
+        history: [],
+        count: 0
+      })
     });
   }
 }
 
-// Helper to load photos from GitHub
+// Helper to load photos from GitHub (UNCHANGED)
 async function getPhotosFromGitHub() {
   try {
     const { data } = await octokit.rest.repos.getContent({
@@ -129,7 +189,7 @@ async function getPhotosFromGitHub() {
   }
 }
 
-// Helper to load history from GitHub
+// Helper to load history from GitHub (UNCHANGED)
 async function getHistoryFromGitHub() {
   try {
     const { data } = await octokit.rest.repos.getContent({

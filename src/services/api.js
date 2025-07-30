@@ -1,4 +1,3 @@
-// Generic API service for all backend calls
 class ApiService {
   constructor(baseUrl = '/api') {
     this.baseUrl = baseUrl;
@@ -77,8 +76,30 @@ class ApiService {
     return this.call('submit-vote-redis', { gameId, playerName, answer }, 'POST');
   }
 
+  // 🎯 UPDATED: Use existing endpoint with new parameter
   async getGameHistory() {
-    return this.call('game-history');
+    try {
+      console.log('📖 Loading game history via get-game-state-redis...');
+      
+      // Use existing endpoint with historyOnly parameter
+      const response = await fetch(`${this.baseUrl}/get-game-state-redis?historyOnly=true`);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load game history');
+      }
+
+      console.log(`✅ Loaded ${result.history?.length || 0} games from history`);
+      
+      return {
+        success: result.success,
+        history: result.history || [],
+        count: result.count || 0
+      };
+    } catch (error) {
+      console.error('❌ Game history API error:', error);
+      throw error;
+    }
   }
 
   // Get complete game state for recovery (REDIS-POWERED!)
