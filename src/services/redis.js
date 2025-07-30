@@ -39,24 +39,46 @@ export const GameStateRedis = {
       ]);
 
       console.log('[REDIS] Raw values:', {
-        gameId, gameMode, currentRound, totalPhotos
+        gameId, gameMode, currentRound, totalPhotos, currentPhoto: currentPhoto ? 'present' : 'null'
       });
+
+      // SAFER JSON PARSING - Handle potential corruption
+      const safeJsonParse = (jsonString, fallback = null) => {
+        if (!jsonString || jsonString === 'null' || jsonString === 'undefined') {
+          return fallback;
+        }
+        try {
+          // Check if it's already an object (shouldn't happen, but safety first)
+          if (typeof jsonString === 'object') {
+            console.warn('[REDIS] ⚠️ Got object instead of string for JSON field:', jsonString);
+            return jsonString;
+          }
+          return JSON.parse(jsonString);
+        } catch (error) {
+          console.error('[REDIS] ❌ JSON parse error for:', jsonString, error.message);
+          return fallback;
+        }
+      };
 
       const gameState = {
         gameId: gameId || null,
         gameMode: gameMode || 'waiting',
         currentRound: parseInt(currentRound) || 0,
-        currentPhoto: currentPhoto ? JSON.parse(currentPhoto) : null,
+        currentPhoto: safeJsonParse(currentPhoto, null),
         totalPhotos: parseInt(totalPhotos) || 0,
         startTime: startTime || null,
-        selectedPhotos: selectedPhotos ? JSON.parse(selectedPhotos) : [],
-        settings: settings ? JSON.parse(settings) : { timePerPhoto: 10 },
+        selectedPhotos: safeJsonParse(selectedPhotos, []),
+        settings: safeJsonParse(settings, { timePerPhoto: 10 }),
         roundStartTime: roundStartTime || null,
         winner: winner || null,
         endedAt: endedAt || null
       };
 
-      console.log('[REDIS] ✅ Parsed game state:', gameState);
+      console.log('[REDIS] ✅ Parsed game state:', {
+        ...gameState,
+        selectedPhotos: `${gameState.selectedPhotos.length} photos`,
+        currentPhoto: gameState.currentPhoto ? 'present' : 'null'
+      });
       return gameState;
       
     } catch (error) {
@@ -104,7 +126,7 @@ export const GameStateRedis = {
     }
   },
 
-  // Update specific game field - FIXED: Use individual keys
+  // Update specific game field - FIXED: Use individual keys with better serialization
   async updateGameField(field, value) {
     try {
       const keyMap = {
@@ -126,16 +148,25 @@ export const GameStateRedis = {
         throw new Error(`Unknown field: ${field}`);
       }
 
-      // Store value appropriately
+      // BETTER SERIALIZATION - Handle objects safely
       let finalValue = value;
-      if (typeof value === 'object' && value !== null) {
-        finalValue = JSON.stringify(value);
+      if (value === null || value === undefined) {
+        finalValue = null;
+      } else if (typeof value === 'object' && value !== null) {
+        // Ensure proper JSON serialization for objects
+        try {
+          finalValue = JSON.stringify(value);
+          console.log(`[REDIS] 📦 Serializing object for ${field}:`, finalValue.substring(0, 100) + '...');
+        } catch (jsonError) {
+          console.error(`[REDIS] ❌ JSON stringify error for ${field}:`, jsonError);
+          throw new Error(`Failed to serialize ${field}: ${jsonError.message}`);
+        }
       } else if (typeof value !== 'string') {
         finalValue = value.toString();
       }
 
       await redis.set(redisKey, finalValue, { ex: 7200 });
-      console.log(`[REDIS] ✅ Updated ${field} = ${finalValue}`);
+      console.log(`[REDIS] ✅ Updated ${field} = ${typeof finalValue === 'string' && finalValue.length > 50 ? finalValue.substring(0, 50) + '...' : finalValue}`);
       return value;
       
     } catch (error) {
