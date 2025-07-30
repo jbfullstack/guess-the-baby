@@ -23,6 +23,9 @@ const ActiveGame = ({
 
   const performance = getPerformanceType(lastScoreGained);
 
+  // 🔧 FIX: Determine if vote has been submitted (more accurate than just selected)
+  const hasSubmittedVote = gameState.votes && gameState.votes[gameState.playerName];
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="max-w-md w-full text-center">
@@ -44,8 +47,8 @@ const ActiveGame = ({
               className="w-64 h-64 object-cover rounded-xl mx-auto border-4 border-purple-400 shadow-lg"
             />
             
-            {/* Answer Status */}
-            {gameState.selectedAnswer && gameState.selectedAnswer !== 'NO_ANSWER' && (
+            {/* 🔧 FIX: Answer Status - Show only AFTER submission, not after selection */}
+            {hasSubmittedVote && (
               <div className="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center space-x-1">
                 <Target className="w-3 h-3" />
                 <span>Answered!</span>
@@ -79,11 +82,11 @@ const ActiveGame = ({
             <button
               key={name}
               onClick={() => onSelectAnswer(name)}
-              disabled={gameState.selectedAnswer || hasTimerExpired}
+              disabled={hasSubmittedVote || hasTimerExpired}
               className={`w-full p-3 rounded-lg border-2 transition-all duration-200 font-medium ${
                 gameState.selectedAnswer === name
                   ? 'border-purple-400 bg-purple-400/20 text-white shadow-lg transform scale-105'
-                  : gameState.selectedAnswer || hasTimerExpired
+                  : hasSubmittedVote || hasTimerExpired
                   ? 'border-gray-500 bg-gray-500/10 text-gray-400 cursor-not-allowed'
                   : 'border-white/20 bg-white/5 text-gray-300 hover:border-purple-400/50 hover:bg-purple-400/10 hover:transform hover:scale-102'
               }`}
@@ -101,10 +104,12 @@ const ActiveGame = ({
           size="lg" 
           className="w-full"
           onClick={onSubmitAnswer}
-          disabled={!gameState.selectedAnswer || gameState.selectedAnswer === 'NO_ANSWER'}
+          disabled={!gameState.selectedAnswer || gameState.selectedAnswer === 'NO_ANSWER' || hasSubmittedVote}
         >
           {hasTimerExpired 
             ? 'Time Expired' 
+            : hasSubmittedVote
+            ? 'Vote Submitted'
             : gameState.selectedAnswer && gameState.selectedAnswer !== 'NO_ANSWER'
             ? 'Submit Answer' 
             : 'Select an Answer'
@@ -125,7 +130,8 @@ const ActiveGame = ({
           </div>
         )}
         
-        {gameState.selectedAnswer && gameState.selectedAnswer !== 'NO_ANSWER' && (
+        {/* 🔧 FIX: Show this message only after actual submission */}
+        {hasSubmittedVote && (
           <div className="mt-4 bg-blue-500/20 border border-blue-500/30 rounded-lg p-3">
             <p className="text-blue-400 text-sm">
               ✅ Vote submitted! Waiting for other players...
