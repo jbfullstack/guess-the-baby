@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export const usePhotoManager = (gameState, actions, setShuffleMessage) => {
+export const usePhotoManager = (gameState, actions, setShuffleMessage, gameSettings) => {
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [photoOrder, setPhotoOrder] = useState([]);
   const [editingPhoto, setEditingPhoto] = useState(null);
@@ -99,6 +99,75 @@ export const usePhotoManager = (gameState, actions, setShuffleMessage) => {
     setEditName('');
   };
 
+  // 🎮 NEW: Fonction pour démarrer le jeu avec les paramètres corrects
+  const startGame = async () => {
+    if (selectedPhotos.length === 0) {
+      alert('Please select at least one photo to start the game');
+      return;
+    }
+
+    if (gameState.players.length === 0) {
+      alert('No players have joined the game yet');
+      return;
+    }
+
+    try {
+      // Construire la liste des photos sélectionnées dans l'ordre choisi
+      const photosToPlay = photoOrder.filter(photo => selectedPhotos.includes(photo.id));
+      
+      console.log('🎮 [PHOTO MANAGER] Starting game with settings:', gameSettings);
+      console.log('🎮 [PHOTO MANAGER] Selected photos:', photosToPlay.length);
+      console.log('🎮 [PHOTO MANAGER] timePerPhoto:', gameSettings?.timePerPhoto);
+      
+      const requestBody = {
+        selectedPhotos: photosToPlay,
+        timePerPhoto: gameSettings?.timePerPhoto || 10 // FIX: Utiliser les paramètres de jeu
+      };
+      
+      console.log('🎮 [PHOTO MANAGER] Request body:', requestBody);
+      
+      const response = await fetch('/api/start-game-redis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const result = await response.json();
+      
+      console.log('🎮 [PHOTO MANAGER] Start game result:', result);
+      
+      if (result.success) {
+        setShuffleMessage(`🎮 Game started! ${result.totalPhotos} photos, ${result.playersCount} players, ${gameSettings?.timePerPhoto || 10}s per round`);
+        setTimeout(() => setShuffleMessage(''), 4000);
+        
+        // Optionnel : Mettre à jour l'état local du jeu
+        actions.updateGameState({
+          gameMode: 'playing',
+          gameId: result.gameId,
+          selectedPhotos: photosToPlay,
+          settings: { timePerPhoto: gameSettings?.timePerPhoto || 10 }
+        });
+      } else {
+        alert('Failed to start game: ' + result.error);
+      }
+    } catch (error) {
+      console.error('🎮 [PHOTO MANAGER] Error starting game:', error);
+      alert('Failed to start game: ' + error.message);
+    }
+  };
+
+  // 🔍 HELPER: Obtenir les photos sélectionnées dans l'ordre
+  const getSelectedPhotosInOrder = () => {
+    return photoOrder.filter(photo => selectedPhotos.includes(photo.id));
+  };
+
+  // 🔍 HELPER: Vérifier si le jeu peut démarrer
+  const canStartGame = () => {
+    return selectedPhotos.length > 0 && gameState.players.length > 0;
+  };
+
   return {
     selectedPhotos,
     photoOrder,
@@ -113,6 +182,10 @@ export const usePhotoManager = (gameState, actions, setShuffleMessage) => {
     deletePhoto,
     startEditingName,
     saveEditedName,
-    cancelEdit
+    cancelEdit,
+    // 🎮 NEW: Nouvelles fonctions
+    startGame,
+    getSelectedPhotosInOrder,
+    canStartGame
   };
 };

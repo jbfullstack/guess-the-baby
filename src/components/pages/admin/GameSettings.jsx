@@ -18,12 +18,19 @@ const GameSettings = ({ gameSettings, setGameSettings }) => {
             min="5"
             max="60"
             value={gameSettings.timePerPhoto}
-            onChange={(e) => setGameSettings(prev => ({ 
-              ...prev, 
-              timePerPhoto: parseInt(e.target.value) || 10 
-            }))}
+            onChange={(e) => {
+              const newValue = parseInt(e.target.value) || 10;
+              console.log('🎮 Settings updated - timePerPhoto:', newValue); // DEBUG
+              setGameSettings(prev => ({ 
+                ...prev, 
+                timePerPhoto: newValue
+              }));
+            }}
             className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white focus:border-purple-400 focus:outline-none"
           />
+          <p className="text-xs text-gray-400 mt-1">
+            Current: {gameSettings.timePerPhoto}s per round
+          </p>
         </div>
       </div>
     </Card>
