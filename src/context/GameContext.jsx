@@ -217,7 +217,9 @@ export const GameProvider = ({ children }) => {
         gameId: data.gameId,
         currentRound: data.currentRound || 1,
         selectedAnswer: null,
-        votes: []
+        votes: [],
+        settings: data.settings || { timePerPhoto: 10 },
+        totalPhotos: data.totalPhotos
         });
     });
 
@@ -247,7 +249,9 @@ export const GameProvider = ({ children }) => {
             hasVoted: false,            // RESET voting state  
             votes: {},                  // CLEAR votes for new round
             scores: data.scores,        // UPDATE scores
-            gameMode: data.gameMode || 'playing'
+            gameMode: data.gameMode || 'playing',
+            settings: data.settings || state.settings,
+            totalPhotos: data.totalRounds || state.totalPhotos
             });
             console.log(`📸 ✅ Updated to round ${data.round}, photo: ${data.photo.id}`);
         };

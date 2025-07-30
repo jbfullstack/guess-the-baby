@@ -26,6 +26,15 @@ const ActiveGame = ({
   // 🔧 FIX: Determine if vote has been submitted (more accurate than just selected)
   const hasSubmittedVote = gameState.votes && gameState.votes[gameState.playerName];
 
+  // 🎮 FIX: Récupérer le timer depuis le serveur avec fallbacks appropriés
+  const timerDuration = gameState.settings?.timePerPhoto || gameState.gameSettings?.timePerPhoto || 10;
+  
+  console.log('🎮 [ACTIVE GAME] Timer settings:', {
+    serverSettings: gameState.settings,
+    localSettings: gameState.gameSettings,
+    finalDuration: timerDuration
+  });
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="max-w-md w-full text-center">
@@ -33,9 +42,21 @@ const ActiveGame = ({
         <div className="mb-4">
           <CountdownTimer 
             key={`timer-${gameState.currentRound}-${gameState.currentPhoto?.id}`}
-            seconds={gameState.settings?.timePerPhoto || gameState.gameSettings?.timePerPhoto || 10} // FIX: Fallback
+            seconds={timerDuration} // 🎮 FIX: Utiliser la valeur correcte
             onComplete={onTimerExpired}
           />
+          
+          {/* 🔍 DEBUG: Afficher la source de la valeur timer */}
+          <div className="text-xs text-gray-400 text-center mt-1">
+            Timer: {timerDuration}s
+            {gameState.settings?.timePerPhoto ? (
+              <span className="text-green-400 ml-2">✓ From server</span>
+            ) : gameState.gameSettings?.timePerPhoto ? (
+              <span className="text-yellow-400 ml-2">⚠️ From local</span>
+            ) : (
+              <span className="text-red-400 ml-2">❌ Default</span>
+            )}
+          </div>
         </div>
         
         {/* Photo */}
