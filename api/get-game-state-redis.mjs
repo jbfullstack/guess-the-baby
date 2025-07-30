@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     }
 
     // Parse settings safely
-    let gameSettings = { timePerPhoto: 10 };
+    let gameSettings = gameState.settings || { timePerPhoto: 10 };
     if (gameState.settings) {
       try {
         if (typeof gameState.settings === 'string') {

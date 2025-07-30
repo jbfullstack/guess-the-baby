@@ -33,7 +33,7 @@ const ActiveGame = ({
         <div className="mb-4">
           <CountdownTimer 
             key={`timer-${gameState.currentRound}-${gameState.currentPhoto?.id}`}
-            seconds={gameState.gameSettings?.timePerPhoto || 10} 
+            seconds={gameState.settings?.timePerPhoto || 10}
             onComplete={onTimerExpired}
           />
         </div>
