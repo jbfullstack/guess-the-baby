@@ -338,83 +338,102 @@ export const PlayersRedis = {
 export const ScoresRedis = {
   // Get all scores
   async getScores() {
-    const scores = await redis.hgetall('game:scores');
-    // Convert string values back to numbers
-    const numericScores = {};
-    Object.entries(scores || {}).forEach(([name, score]) => {
-      numericScores[name] = parseInt(score) || 0;
-    });
-    return numericScores;
+    try {
+      const scoreKeys = await redis.keys('score:*');
+      const scores = {};
+      
+      if (scoreKeys.length === 0) {
+        return {};
+      }
+      
+      // Get all score values
+      const values = await redis.mget(...scoreKeys);
+      
+      scoreKeys.forEach((key, index) => {
+        // Extract player name from key: score:playerName -> playerName
+        const playerName = key.replace('score:', '');
+        scores[playerName] = parseInt(values[index]) || 0;
+      });
+      
+      console.log('[SCORES] 📊 Retrieved scores:', scores);
+      return scores;
+    } catch (error) {
+      console.error('[SCORES] Error getting scores:', error);
+      return {};
+    }
   },
 
-  // Set player score
+  // MODIFIER setScore :
   async setScore(playerName, score) {
-    await redis.hset('game:scores', playerName, score);
-    await redis.expire('game:scores', 7200);
+    const scoreKey = `score:${playerName}`;
+    await redis.set(scoreKey, score.toString(), { ex: 7200 });
+    console.log(`[SCORES] 🎯 Set ${scoreKey} = ${score}`);
     return score;
   },
 
-  // Increment player score
+  // MODIFIER incrementScore :
   async incrementScore(playerName, points = 1) {
-    const newScore = await redis.hincrby('game:scores', playerName, points);
-    await redis.expire('game:scores', 7200);
+    const scoreKey = `score:${playerName}`;
+    const currentScore = await redis.get(scoreKey);
+    const newScore = (parseInt(currentScore) || 0) + points;
+    await redis.set(scoreKey, newScore.toString(), { ex: 7200 });
+    console.log(`[SCORES] 📈 Incremented ${scoreKey}: ${currentScore} + ${points} = ${newScore}`);
     return newScore;
   },
 
-  // Reset all scores
+  // MODIFIER resetScores :
   async resetScores() {
-    await redis.del('game:scores');
+    const scoreKeys = await redis.keys('score:*');
+    if (scoreKeys.length > 0) {
+      await redis.del(...scoreKeys);
+      console.log('[SCORES] 🧹 Deleted score keys:', scoreKeys);
+    }
     return {};
   },
 
   // Initialize scores for players
-  async initializeScores(playerNames) {
-    try {
-      console.log('[SCORES] 🚀 Initializing scores for players:', playerNames);
-      
-      // 🔥 CRITICAL: Clear existing scores first to avoid corruption
-      console.log('[SCORES] 🧹 Clearing existing scores...');
-      await redis.del('game:scores');
-      
-      if (!playerNames || playerNames.length === 0) {
-        console.log('[SCORES] ⚠️ No players to initialize');
-        return {};
-      }
-      
-      // 🔥 FIX: Use individual SET commands instead of pipeline to avoid Redis issues
-      console.log('[SCORES] 📝 Setting individual scores...');
-      
-      for (const name of playerNames) {
-        if (name && typeof name === 'string' && name.trim().length > 0) {
-          const cleanName = name.trim();
-          console.log(`[SCORES] 🎯 Setting score for: "${cleanName}"`);
-          await redis.hset('game:scores', cleanName, 0);
-        } else {
-          console.warn(`[SCORES] ⚠️ Skipping invalid player name:`, name);
-        }
-      }
-      
-      // Set expiration
-      await redis.expire('game:scores', 7200);
-      
-      // Verify what was actually set
-      const actualScores = await redis.hgetall('game:scores');
-      console.log('[SCORES] ✅ Actual scores after initialization:', actualScores);
-      
-      // Convert string values back to numbers for return
-      const numericScores = {};
-      Object.entries(actualScores || {}).forEach(([name, score]) => {
-        numericScores[name] = parseInt(score) || 0;
-      });
-      
-      console.log('[SCORES] 🎯 Final scores object:', numericScores);
-      return numericScores;
-      
-    } catch (error) {
-      console.error('[SCORES] ❌ Error initializing scores:', error);
-      throw error;
+ async initializeScores(playerNames) {
+  try {
+    console.log('[SCORES] 🚀 Initializing scores with individual keys for:', playerNames);
+    
+    // 🔥 FIX: Use individual keys instead of hash
+    // Clear existing score keys
+    const existingKeys = await redis.keys('score:*');
+    if (existingKeys.length > 0) {
+      await redis.del(...existingKeys);
+      console.log('[SCORES] 🧹 Cleared existing score keys:', existingKeys);
     }
-  },
+    
+    if (!playerNames || playerNames.length === 0) {
+      return {};
+    }
+    
+    // Set individual scores with separate keys
+    const results = {};
+    for (const name of playerNames) {
+      if (name && typeof name === 'string' && name.trim().length > 0) {
+        const cleanName = name.trim();
+        const scoreKey = `score:${cleanName}`;
+        
+        console.log(`[SCORES] 🎯 Setting individual key: ${scoreKey} = 0`);
+        await redis.set(scoreKey, '0', { ex: 7200 });
+        
+        // Verify immediately
+        const verification = await redis.get(scoreKey);
+        console.log(`[SCORES] ✅ Verification ${scoreKey}: ${verification}`);
+        
+        results[cleanName] = 0;
+      }
+    }
+    
+    console.log('[SCORES] 🎯 Final initialized scores:', results);
+    return results;
+    
+  } catch (error) {
+    console.error('[SCORES] ❌ Error initializing scores:', error);
+    throw error;
+  }
+},
 };
 
 export const VotesRedis = {
