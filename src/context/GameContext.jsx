@@ -88,7 +88,7 @@ const initialGameState = {
   hasVoted: false,
   players: [],
   photos: [],
-  names: [],
+  names: [], // 🚨 EMPTY ARRAY instead of ['Alice', 'Bob', 'Charlie', 'Diana']
   scores: {},
   gameSettings: {
     timePerPhoto: DEFAULT_TIME_PER_ROUND

@@ -65,8 +65,8 @@ class ApiService {
   }
 
   // Game-specific API calls (REDIS-POWERED!)
-  async joinGame(playerName) {
-    return this.call('join-game-redis', { playerName }, 'POST');
+  async joinGame(playerName, isRejoin = false) {
+    return this.call('join-game-redis', { playerName, rejoin: isRejoin }, 'POST');
   }
 
   async startGame(settings) {

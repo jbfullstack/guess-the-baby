@@ -108,8 +108,8 @@ const GamePage = () => {
   }, [gameState.currentRound]);
 
   // Join game handler
-  const handleJoinGame = async (name) => {
-    await actions.joinGame(name);
+  const handleJoinGame = async (playerName, isRejoin = false) => {
+    await actions.joinGame(playerName, isRejoin);
   };
 
   // 🎯 IMPROVED Submit answer handler with Kahoot score feedback
