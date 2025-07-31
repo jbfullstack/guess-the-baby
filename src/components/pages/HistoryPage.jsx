@@ -164,9 +164,23 @@ const HistoryPage = () => {
               {/* Player Scores */}
               <div className="bg-white/5 rounded-lg p-4">
                 <h3 className="text-lg font-semibold text-white mb-3">Final Scores</h3>
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-96 overflow-y-auto">
                   {selectedGame.players && selectedGame.players.length > 0 ? (
                     selectedGame.players
+                      // 🔥 FILTER: Only show real players (valid names and score > 0 OR meaningful names)
+                      .filter(player => {
+                        const name = player.name || '';
+                        const score = player.score || 0;
+                        
+                        // Filter out players with suspicious names (just numbers, empty, etc.)
+                        const isValidName = name.length > 0 && 
+                                          name !== 'Unknown Player' &&
+                                          !/^[0-9]+$/.test(name) && // Not just numbers like "0", "1", "2"
+                                          name.trim().length > 0;
+                        
+                        // Keep players with valid names OR players with points
+                        return isValidName || score > 0;
+                      })
                       .sort((a, b) => (b.score || 0) - (a.score || 0))
                       .map((player, index) => (
                         <div 
@@ -188,10 +202,10 @@ const HistoryPage = () => {
                             </span>
                             {index === 0 && <Crown className="w-4 h-4 text-yellow-400" />}
                           </div>
-                          <span className={`font-bold ${
+                          <span className={`font-bold text-2xl ${
                             index === 0 ? 'text-yellow-400' : 'text-white'
                           }`}>
-                            {player.score || 0}/{selectedGame.totalRounds || selectedGame.photosUsed || '?'}
+                            {player.score || 0}
                           </span>
                         </div>
                       ))
