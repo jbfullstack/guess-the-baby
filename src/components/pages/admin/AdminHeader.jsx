@@ -10,7 +10,7 @@ const AdminHeader = ({ actions, totalVotes, totalPlayers }) => {
           <h1 className="text-3xl font-bold text-white mb-2">Admin Panel</h1>
           <p className="text-gray-300">Manage your baby photo guessing game</p>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex items-center space-x-2">
           <div className="text-xs text-gray-400">
             Live: {totalVotes}/{totalPlayers}
           </div>

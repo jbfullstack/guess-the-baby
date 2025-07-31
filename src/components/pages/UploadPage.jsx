@@ -88,6 +88,9 @@ const UploadPage = () => {
     );
   }
 
+  // Check if selected name is a new name (not in existing names list)
+  const isNewName = selectedName && !gameState.names.includes(selectedName);
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
@@ -129,6 +132,24 @@ const UploadPage = () => {
           
           {!showNewNameInput ? (
             <div className="space-y-2">
+              {/* Show selected new name if it exists */}
+              {isNewName && (
+                <div className="mb-3 p-3 bg-purple-500/20 border border-purple-400/50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
+                      <span className="text-white font-medium">{selectedName} (new)</span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedName('')}
+                      className="text-gray-400 hover:text-gray-300 text-sm"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              )}
+              
               {gameState.names.map(name => (
                 <label key={name} className="flex items-center space-x-3 cursor-pointer group">
                   <input
