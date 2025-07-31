@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Pusher from 'pusher-js';
-import { PUSHER_ID } from '../constants';
+import { PUSHER_ID } from '../constants.js';
 
 export const useRealtimeVotes = (gameState) => {
   const [liveVotes, setLiveVotes] = useState({});

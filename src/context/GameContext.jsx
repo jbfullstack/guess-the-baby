@@ -1,9 +1,8 @@
 import React, { createContext, useState, useEffect, useReducer } from 'react';
 import Pusher from 'pusher-js';
 import apiService from '../services/api';
-import { PUSHER_ID } from '../constants';
 
-import { DEFAULT_TIME_PER_ROUND } from '../constants';
+import { PUSHER_ID, DEFAULT_TIME_PER_ROUND } from '../constants.js';
 
 export const GameContext = createContext();
 

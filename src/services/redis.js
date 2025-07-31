@@ -1,7 +1,7 @@
 // Redis service for real-time game state - FIXED UPSTASH BUG
 import { Redis } from '@upstash/redis';
 
-import { DEFAULT_TIME_PER_ROUND } from '../constants';
+import { DEFAULT_TIME_PER_ROUND } from '../constants.js';
 
 // Initialize Redis client
 const redis = Redis.fromEnv();
