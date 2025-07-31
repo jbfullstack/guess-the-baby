@@ -1,3 +1,4 @@
+// Generic API service for all backend calls
 class ApiService {
   constructor(baseUrl = '/api') {
     this.baseUrl = baseUrl;
@@ -76,7 +77,7 @@ class ApiService {
     return this.call('submit-vote-redis', { gameId, playerName, answer }, 'POST');
   }
 
-  // 🎯 UPDATED: Use existing endpoint with new parameter
+  // 🎯 UPDATED: Game history via existing endpoint with new parameter
   async getGameHistory() {
     try {
       console.log('📖 Loading game history via get-game-state-redis...');
@@ -112,7 +113,7 @@ class ApiService {
     return this.call('reset-game-state-redis', { resetType }, 'POST');
   }
 
-  // NEW: Test Redis connection
+  // Test Redis connection
   async testRedis() {
     return this.call('redis-test');
   }

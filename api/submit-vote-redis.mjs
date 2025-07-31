@@ -195,10 +195,21 @@ export default async function handler(req, res) {
 
         console.log(`[VOTE] ✅ Game state updated to FINISHED`);
 
-        // Save to GitHub history (async, non-blocking)
-        saveGameToGitHubHistory(gameState, scores, selectedPhotos.length).catch(err => 
-          console.error('[VOTE] History save failed:', err)
-        );
+        // 🔥 SAVE TO GITHUB HISTORY - CRITICAL FIX
+        console.log(`[VOTE] 💾 Starting history save for game ${gameState.gameId}...`);
+        
+        try {
+          await saveGameToGitHubHistory(gameState, scores, selectedPhotos.length, players);
+          console.log(`[VOTE] ✅ History save completed successfully`);
+        } catch (historyError) {
+          console.error(`[VOTE] ❌ HISTORY SAVE FAILED:`, historyError);
+          console.error(`[VOTE] ❌ Game data:`, {
+            gameId: gameState.gameId,
+            winner,
+            totalPlayers: players.length,
+            scores
+          });
+        }
         
         // 🎉 SEND GAME END EVENT - CRITICAL
         await pusher.trigger('baby-game', 'game-ended', {
@@ -310,8 +321,10 @@ export default async function handler(req, res) {
   }
 }
 
-// Helper function to save completed game to GitHub (async)
-async function saveGameToGitHubHistory(gameState, scores, totalRounds) {
+// 🔥 CRITICAL: Helper function to save completed game to GitHub - FIXED VERSION
+async function saveGameToGitHubHistory(gameState, scores, totalRounds, players) {
+  console.log('[HISTORY] 🚀 Starting GitHub history save...');
+  
   try {
     const { Octokit } = await import('@octokit/rest');
     
@@ -319,72 +332,135 @@ async function saveGameToGitHubHistory(gameState, scores, totalRounds) {
       auth: process.env.GITHUB_TOKEN,
     });
 
+    console.log('[HISTORY] 📡 GitHub client initialized');
+
+    // 🔧 CRITICAL FIX: Parse settings properly (was causing the bug!)
+    let parsedSettings = { timePerPhoto: 10 };
+    try {
+      if (typeof gameState.settings === 'string') {
+        parsedSettings = JSON.parse(gameState.settings);
+      } else if (typeof gameState.settings === 'object' && gameState.settings !== null) {
+        parsedSettings = gameState.settings;
+      }
+      console.log('[HISTORY] ⚙️ Parsed settings:', parsedSettings);
+    } catch (settingsError) {
+      console.warn('[HISTORY] ⚠️ Could not parse settings, using default:', settingsError.message);
+    }
+
+    // 🔧 CRITICAL FIX: Handle startTime properly
+    let gameStartTime = gameState.startTime;
+    if (typeof gameStartTime === 'string') {
+      gameStartTime = parseInt(gameStartTime);
+    }
+    if (!gameStartTime || isNaN(gameStartTime)) {
+      gameStartTime = Date.now() - 10 * 60 * 1000; // Default to 10 minutes ago
+      console.warn('[HISTORY] ⚠️ Invalid startTime, using default');
+    }
+
+    console.log('[HISTORY] ⏰ Game start time:', new Date(gameStartTime).toISOString());
+
     // Load existing history
     let history = [];
+    let sha;
+    
     try {
+      console.log('[HISTORY] 📖 Loading existing history from GitHub...');
       const { data } = await octokit.rest.repos.getContent({
         owner: process.env.GITHUB_REPO_OWNER,
         repo: process.env.GITHUB_REPO_NAME,
         path: 'gameHistory.json',
       });
+      
       history = JSON.parse(Buffer.from(data.content, 'base64').toString());
-    } catch (error) {
-      console.log('[HISTORY] Creating new gameHistory.json file');
+      sha = data.sha;
+      console.log(`[HISTORY] ✅ Loaded existing history with ${history.length} games`);
+      
+    } catch (loadError) {
+      if (loadError.status === 404) {
+        console.log('[HISTORY] 📝 gameHistory.json not found, will create new file');
+      } else {
+        console.error('[HISTORY] ❌ Error loading existing history:', loadError.message);
+        throw loadError;
+      }
     }
 
     // Calculate winner
     const sortedScores = Object.entries(scores).sort(([,a], [,b]) => b - a);
     const winner = sortedScores[0]?.[0] || 'Unknown';
 
-    // Add current game to history
+    // 🔥 CRITICAL: Create game record with proper data handling
     const gameRecord = {
-      id: gameState.gameId,
-      date: gameState.startTime || new Date().toISOString(),
+      id: parseInt(gameState.gameId) || Date.now(),
+      date: gameStartTime,
       endedAt: new Date().toISOString(),
-      players: sortedScores.map(([name, score]) => ({ name, score })),
+      players: sortedScores.map(([name, score]) => ({ 
+        name: name || 'Unknown', 
+        score: parseInt(score) || 0 
+      })),
       winner: winner,
-      totalRounds: totalRounds,
-      duration: calculateDuration(gameState.startTime),
-      photosUsed: totalRounds,
-      settings: gameState.settings || { timePerPhoto: 10 }
+      totalRounds: parseInt(totalRounds) || 0,
+      duration: calculateDuration(gameStartTime),
+      photosUsed: parseInt(totalRounds) || 0,
+      settings: parsedSettings
     };
 
+    console.log('[HISTORY] 📝 Game record prepared:', {
+      id: gameRecord.id,
+      winner: gameRecord.winner,
+      players: gameRecord.players.length,
+      totalRounds: gameRecord.totalRounds
+    });
+
+    // Add to history and limit to 50 games
     history.unshift(gameRecord);
-    history = history.slice(0, 50); // Keep last 50 games
+    history = history.slice(0, 50);
 
-    // Save updated history
-    let sha;
-    try {
-      const { data: existingFile } = await octokit.rest.repos.getContent({
-        owner: process.env.GITHUB_REPO_OWNER,
-        repo: process.env.GITHUB_REPO_NAME,
-        path: 'gameHistory.json',
-      });
-      sha = existingFile.sha;
-    } catch (error) {
-      // File doesn't exist yet
-    }
+    console.log(`[HISTORY] 📚 Updated history: ${history.length} games total`);
 
-    await octokit.rest.repos.createOrUpdateFileContents({
+    // Save updated history to GitHub
+    console.log('[HISTORY] 💾 Saving to GitHub...');
+    
+    const result = await octokit.rest.repos.createOrUpdateFileContents({
       owner: process.env.GITHUB_REPO_OWNER,
       repo: process.env.GITHUB_REPO_NAME,
       path: 'gameHistory.json',
       message: `Add game ${gameState.gameId} to history - Winner: ${winner}`,
       content: Buffer.from(JSON.stringify(history, null, 2)).toString('base64'),
-      sha
+      ...(sha && { sha })
     });
 
-    console.log('[HISTORY] ✅ Game saved to GitHub history successfully');
+    console.log('[HISTORY] ✅ Game saved to GitHub history successfully!');
+    console.log('[HISTORY] 📊 Commit SHA:', result.data.commit?.sha?.substring(0, 8));
+    
+    return gameRecord;
+
   } catch (error) {
-    console.error('[HISTORY] ❌ Failed to save game to GitHub history:', error);
-    // Don't throw - this is async and shouldn't break the game
+    console.error('[HISTORY] ❌ CRITICAL ERROR saving to GitHub:', error);
+    console.error('[HISTORY] ❌ Error details:', {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      githubOwner: process.env.GITHUB_REPO_OWNER,
+      githubRepo: process.env.GITHUB_REPO_NAME,
+      hasGithubToken: !!process.env.GITHUB_TOKEN
+    });
+    
+    throw error;
   }
 }
 
+// Helper function to calculate game duration
 function calculateDuration(startTime) {
   if (!startTime) return 'Unknown';
-  const duration = Date.now() - new Date(startTime).getTime();
-  const minutes = Math.floor(duration / 60000);
-  const seconds = Math.floor((duration % 60000) / 1000);
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  
+  try {
+    const start = typeof startTime === 'number' ? startTime : new Date(startTime).getTime();
+    const duration = Date.now() - start;
+    const minutes = Math.floor(duration / 60000);
+    const seconds = Math.floor((duration % 60000) / 1000);
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  } catch (error) {
+    console.warn('[HISTORY] Could not calculate duration:', error.message);
+    return 'Unknown';
+  }
 }

@@ -31,7 +31,7 @@ const HistoryPage = () => {
     }
   };
 
-  // Use ONLY real data - NO mock data anymore
+  // 🔥 CRITICAL: Use ONLY real data - NO mock data anymore!
   const historyToShow = gameState.gameHistory || [];
 
   const filteredHistory = historyToShow.filter(game => {
