@@ -10,7 +10,7 @@ import PlayersManager from './admin/PlayersManager';
 import GameController from './admin/GameController';
 import PhotosManager from './admin/PhotosManager';
 
-import { DEFAULT_TIME_PER_ROUND } from '../../constants';
+import { DEFAULT_TIME_PER_ROUND } from '../../constants.js';
 
 const AdminPage = () => {
   const { gameState, actions, onlineStatus } = useGame();

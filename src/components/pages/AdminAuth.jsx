@@ -4,7 +4,7 @@ import { useGame } from '../../hooks/useGame';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 
-import { ADMIN_PASSWORD } from '../../constants';
+import { ADMIN_PASSWORD } from '../../constants.js';
 
 const AdminAuth = () => {
   const { actions } = useGame();

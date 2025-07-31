@@ -1,7 +1,7 @@
 import Pusher from 'pusher';
 import { Octokit } from '@octokit/rest';
 
-import { DEFAULT_TIME_PER_ROUND } from '../src/constants';
+import { DEFAULT_TIME_PER_ROUND } from '../src/constants.js';
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID,
