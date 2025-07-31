@@ -251,9 +251,10 @@ export const GameProvider = ({ children }) => {
             scores: data.scores,        // UPDATE scores
             gameMode: data.gameMode || 'playing',
             settings: data.settings || state.settings,
-            totalPhotos: data.totalRounds || state.totalPhotos
-            });
-            console.log(`📸 ✅ Updated to round ${data.round}, photo: ${data.photo.id}`);
+            totalPhotos: data.totalRounds || state.totalPhotos,
+            settings: data.settings || state.settings
+          });
+          console.log(`📸 ✅ Updated to round ${data.round}, photo: ${data.photo.id}`);
         };
         
         // Apply delay if specified, otherwise immediate

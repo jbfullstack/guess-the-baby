@@ -275,7 +275,8 @@ export default async function handler(req, res) {
           totalRounds: selectedPhotos.length,
           scores: scores,
           gameMode: 'playing',
-          showDelay: 3000
+          showDelay: 3000,
+          settings: gameSettings || { timePerPhoto: 10 }
         });
         
         console.log(`[VOTE] 📤➡️ Next photo event sent for round ${nextRound}`);
