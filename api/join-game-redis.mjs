@@ -24,10 +24,10 @@ async function getRealNamesFromGitHub() {
     });
     const gameData = JSON.parse(Buffer.from(data.content, 'base64').toString());
     console.log('✅ Real names loaded from GitHub:', gameData.names);
-    return gameData.names || ['Alice', 'Bob', 'Charlie', 'Diana']; // Fallback to mock if no real names
+    return gameData.names || []; // Fallback to mock if no real names
   } catch (error) {
     console.warn('❌ Failed to load real names from GitHub:', error.message);
-    return ['Alice', 'Bob', 'Charlie', 'Diana']; // Fallback to mock names
+    return []; // Fallback to mock names
   }
 }
 
@@ -39,19 +39,93 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    const { playerName } = req.body;
+    const { playerName, rejoin = false } = req.body;
 
     if (!playerName || !playerName.trim()) {
       return res.status(400).json({ error: 'Player name is required' });
     }
 
-    console.log(`🎮 Player "${playerName}" attempting to join...`);
+    console.log(`🎮 Player "${playerName}" attempting to join... Rejoin: ${rejoin}`);
 
     // 1. Get current game state from Redis (FAST!)
     const gameState = await GameStateRedis.getCurrentGame();
     console.log('Game state loaded:', gameState.gameMode);
     
-    // 2. Add player to Redis (ATOMIC!)
+    // 2. Check if player already exists BEFORE trying to add
+    const allPlayers = await PlayersRedis.getPlayers();
+    const existingPlayer = allPlayers.find(p => p && p.name === playerName.trim());
+    
+    if (existingPlayer) {
+      if (rejoin) {
+        console.log(`🔄 Player "${playerName}" rejoining game...`);
+        
+        // Update heartbeat for rejoining player
+        await PlayersRedis.updateHeartbeat(playerName.trim());
+        console.log('Heartbeat updated for rejoining player');
+        
+        // Get updated data for rejoin response
+        const [updatedPlayers, allScores, realNames] = await Promise.all([
+          PlayersRedis.getPlayers(),
+          ScoresRedis.getScores(),
+          getRealNamesFromGitHub()
+        ]);
+        
+        // Notify other players that this player rejoined
+        await pusher.trigger('baby-game', 'player-rejoined', {
+          player: existingPlayer,
+          totalPlayers: updatedPlayers.length,
+          allPlayers: updatedPlayers,
+          names: realNames,
+          gameState: {
+            gameMode: gameState.gameMode,
+            gameId: gameState.gameId
+          }
+        });
+        console.log('Pusher notification sent for rejoin');
+
+        // Send sync state to rejoining player
+        // 🚨 IMPORTANT: currentPhoto is ALREADY parsed by Redis service - don't JSON.parse again!
+        await pusher.trigger('baby-game', 'sync-state', {
+          targetPlayer: playerName.trim(),
+          gameState: {
+            players: updatedPlayers,
+            gameMode: gameState.gameMode,
+            gameId: gameState.gameId,
+            scores: allScores,
+            names: realNames,
+            currentRound: parseInt(gameState.currentRound) || 0,
+            currentPhoto: gameState.currentPhoto  // Already parsed - use directly!
+          }
+        });
+        console.log('Sync state sent to rejoining player');
+
+        const responseTime = Date.now() - startTime;
+
+        return res.json({ 
+          success: true,
+          message: 'Rejoined game successfully',
+          gameId: gameState.gameId,
+          gameMode: gameState.gameMode,
+          totalPlayers: updatedPlayers.length,
+          players: updatedPlayers,
+          scores: allScores,
+          names: realNames,
+          rejoined: true,
+          responseTime: `${responseTime}ms`
+        });
+        
+      } else {
+        // Player exists but not trying to rejoin
+        return res.status(400).json({ 
+          error: 'Player name already taken',
+          suggestion: 'Use a different name or click "Rejoin" if this is your session'
+        });
+      }
+    }
+
+    // 3. NORMAL JOIN FLOW - Player doesn't exist, proceed with original logic
+    console.log('New player joining...');
+    
     const newPlayer = {
       name: playerName.trim(),
       id: Date.now().toString(),
@@ -62,30 +136,30 @@ export default async function handler(req, res) {
     await PlayersRedis.addPlayer(newPlayer);
     console.log('Player added successfully');
     
-    // 3. Initialize score in Redis
+    // 4. Initialize score in Redis
     await ScoresRedis.setScore(newPlayer.name, 0);
     console.log('Score initialized');
     
-    // 4. Update heartbeat
+    // 5. Update heartbeat
     await PlayersRedis.updateHeartbeat(newPlayer.name);
     console.log('Heartbeat updated');
 
-    // 5. Get updated data + REAL NAMES
-    const [allPlayers, allScores, realNames] = await Promise.all([
+    // 6. Get updated data + REAL NAMES
+    const [finalPlayers, finalScores, realNames] = await Promise.all([
       PlayersRedis.getPlayers(),
       ScoresRedis.getScores(),
-      getRealNamesFromGitHub() // NOUVEAU : Charge les vrais noms
+      getRealNamesFromGitHub()
     ]);
     
-    console.log(`Total players now: ${allPlayers.length}`);
+    console.log(`Total players now: ${finalPlayers.length}`);
     console.log(`Real names loaded: ${realNames.length} names:`, realNames);
 
-    // 6. Notify all clients via Pusher
+    // 7. Notify all clients via Pusher
     await pusher.trigger('baby-game', 'player-joined', {
       player: newPlayer,
-      totalPlayers: allPlayers.length,
-      allPlayers: allPlayers,
-      names: realNames, // NOUVEAU : Inclut les vrais noms
+      totalPlayers: finalPlayers.length,
+      allPlayers: finalPlayers,
+      names: realNames,
       gameState: {
         gameMode: gameState.gameMode,
         gameId: gameState.gameId
@@ -93,17 +167,18 @@ export default async function handler(req, res) {
     });
     console.log('Pusher notification sent with real names');
 
-    // 7. Send sync state to new player
+    // 8. Send sync state to new player
+    // 🚨 IMPORTANT: currentPhoto is ALREADY parsed - don't JSON.parse again!
     await pusher.trigger('baby-game', 'sync-state', {
       targetPlayer: newPlayer.name,
       gameState: {
-        players: allPlayers,
+        players: finalPlayers,
         gameMode: gameState.gameMode,
         gameId: gameState.gameId,
-        scores: allScores,
-        names: realNames, // NOUVEAU : Inclut les vrais noms
+        scores: finalScores,
+        names: realNames,
         currentRound: parseInt(gameState.currentRound) || 0,
-        currentPhoto: gameState.currentPhoto ? JSON.parse(gameState.currentPhoto) : null
+        currentPhoto: gameState.currentPhoto  // Already parsed - use directly!
       }
     });
     console.log('Sync state sent with real names');
@@ -115,10 +190,10 @@ export default async function handler(req, res) {
       message: 'Joined game successfully',
       gameId: gameState.gameId,
       gameMode: gameState.gameMode,
-      totalPlayers: allPlayers.length,
-      players: allPlayers,
-      scores: allScores,
-      names: realNames, // NOUVEAU : Inclut les vrais noms dans la réponse
+      totalPlayers: finalPlayers.length,
+      players: finalPlayers,
+      scores: finalScores,
+      names: realNames,
       responseTime: `${responseTime}ms`
     });
 

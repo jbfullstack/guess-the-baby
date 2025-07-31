@@ -13,15 +13,15 @@ import PhotosManager from './admin/PhotosManager';
 import { DEFAULT_TIME_PER_ROUND } from '../../constants';
 
 const AdminPage = () => {
-  const { gameState, actions } = useGame();
+  const { gameState, actions, onlineStatus } = useGame();
   
-  // FIX: Initialisation correcte avec valeurs par défaut et synchronisation
+  // Initialize gameSettings with default values and sync with gameState
   const [gameSettings, setGameSettings] = useState({
     timePerPhoto: DEFAULT_TIME_PER_ROUND,
     ...gameState.gameSettings
   });
   
-  // FIX: Synchroniser gameSettings avec gameState quand il change
+  // Sync gameSettings with gameState when it changes
   useEffect(() => {
     if (gameState.gameSettings) {
       setGameSettings(prev => ({
@@ -31,57 +31,84 @@ const AdminPage = () => {
     }
   }, [gameState.gameSettings]);
   
-  // Debug: Log des paramètres actuels
+  // Debug: Log current gameSettings
   useEffect(() => {
     console.log('🎮 [ADMIN PAGE] Current gameSettings:', gameSettings);
   }, [gameSettings]);
   
-  // Hooks personnalisés pour la logique métier
+  // Custom hooks for business logic
   const realtimeVotes = useRealtimeVotes(gameState);
   const playerManager = usePlayerManager(gameState, realtimeVotes.setShuffleMessage);
   
-  // FIX: Passer gameSettings au photoManager
+  // Pass gameSettings to photoManager
   const photoManager = usePhotoManager(gameState, actions, realtimeVotes.setShuffleMessage, gameSettings);
+
+  // Calculate player statistics for AdminHeader
+  const totalPlayers = gameState.players.length;
+  
+  // For connected players - use online status if available, otherwise assume all joined players are connected
+  const totalConnectedPlayers = onlineStatus?.connectedPlayers || 
+                                realtimeVotes.liveTotalPlayers || 
+                                totalPlayers; // Fallback: assume joined = connected
+  
+  // For active players - those currently voting or participating
+  const totalActivePlayers = onlineStatus?.activePlayers || 
+                            realtimeVotes.liveVoteCount || 
+                            (gameState.gameMode === 'playing' ? realtimeVotes.getCurrentVotes().length : 0);
+
+  // Debug logging for player statistics
+  useEffect(() => {
+    console.log('📊 Admin Panel Player Stats:', {
+      totalActivePlayers,
+      totalConnectedPlayers, 
+      totalPlayers,
+      gameMode: gameState.gameMode,
+      onlineStatus,
+      liveVoteCount: realtimeVotes.liveVoteCount,
+      liveTotalPlayers: realtimeVotes.liveTotalPlayers
+    });
+  }, [totalActivePlayers, totalConnectedPlayers, totalPlayers, gameState.gameMode, onlineStatus, realtimeVotes.liveVoteCount, realtimeVotes.liveTotalPlayers]);
 
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-6xl mx-auto space-y-6">
         
-        {/* Header */}
+        {/* Header with player statistics */}
         <AdminHeader 
           actions={actions}
-          totalVotes={realtimeVotes.liveVoteCount || realtimeVotes.getCurrentVotes().length}
-          totalPlayers={realtimeVotes.liveTotalPlayers || gameState.players.length}
+          totalActivePlayers={totalActivePlayers}
+          totalConnectedPlayers={totalConnectedPlayers}
+          totalPlayers={totalPlayers}
         />
 
-        {/* Grid principal */}
+        {/* Main grid */}
         <div className="grid lg:grid-cols-3 gap-6">
           
-          {/* Paramètres du jeu */}
+          {/* Game settings */}
           <GameSettings 
             gameSettings={gameSettings}
             setGameSettings={setGameSettings}
           />
           
-          {/* Gestion des joueurs */}
+          {/* Player management */}
           <PlayersManager 
             gameState={gameState}
             playerManager={playerManager}
           />
 
-          {/* Contrôle du jeu */}
+          {/* Game control */}
           <GameController 
             gameState={gameState}
             actions={actions}
             selectedPhotos={photoManager.selectedPhotos}
             photoOrder={photoManager.photoOrder}
-            gameSettings={gameSettings} // FIX: Passer les bons paramètres
+            gameSettings={gameSettings} // Pass correct settings
             realtimeVotes={realtimeVotes}
-            photoManager={photoManager} // FIX: Passer photoManager pour accéder à startGame
+            photoManager={photoManager} // Pass photoManager for startGame access
           />
         </div>
 
-        {/* Gestion des photos */}
+        {/* Photo management */}
         <PhotosManager 
           photoManager={photoManager}
           shuffleMessage={realtimeVotes.shuffleMessage}

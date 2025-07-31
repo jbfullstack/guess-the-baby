@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
     // Ensure we have some default names even if no photos
     if (gameData.names.length === 0) {
-      gameData.names = ['Alice', 'Bob', 'Charlie', 'Diana'];
+      gameData.names = [];
     }
 
     res.json({

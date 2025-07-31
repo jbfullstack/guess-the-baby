@@ -88,7 +88,7 @@ const initialGameState = {
   hasVoted: false,
   players: [],
   photos: [],
-  names: ['Alice', 'Bob', 'Charlie', 'Diana'],
+  names: [],
   scores: {},
   gameSettings: {
     timePerPhoto: DEFAULT_TIME_PER_ROUND
@@ -98,7 +98,13 @@ const initialGameState = {
   gameId: null,
   votes: [],
   currentRound: 0,
-  isRecovering: false
+  isRecovering: false,
+  // Online status tracking
+  onlineStatus: {
+    connectedPlayers: 0,
+    activePlayers: 0,
+    lastUpdated: null
+  }
 };
 
 export const GameProvider = ({ children }) => {
@@ -185,35 +191,62 @@ export const GameProvider = ({ children }) => {
     }
   };
 
-   const bindPusherEvents = (channel) => {
+  const bindPusherEvents = (channel) => {
     console.log('🎯 Binding Pusher events...');
 
     channel.bind('player-joined', (data) => {
-        console.log('🎉 Player joined:', data);
-        
-        // Update all players if provided, otherwise add single player
-        if (data.allPlayers) {
+      console.log('🎉 Player joined:', data);
+      
+      // Update all players if provided, otherwise add single player
+      if (data.allPlayers) {
         dispatch({
-            type: 'SET_ALL_PLAYERS',
-            payload: data.allPlayers
+          type: 'SET_ALL_PLAYERS',
+          payload: data.allPlayers
         });
-        } else {
+      } else {
         dispatch({
-            type: 'ADD_PLAYER',
-            payload: data.player
+          type: 'ADD_PLAYER',
+          payload: data.player
         });
-        }
+      }
 
-        // NOUVEAU : Update names if provided
-        if (data.names && Array.isArray(data.names)) {
+      // Update names if provided
+      if (data.names && Array.isArray(data.names)) {
         console.log('🏷️ Updating names from player-joined:', data.names);
         updateGameState({ names: data.names });
-        }
+      }
+    });
+
+    // Handle player rejoined (same as player joined)
+    channel.bind('player-rejoined', (data) => {
+      console.log('🔄 Player rejoined:', data);
+      
+      // Handle rejoined same as joined - update player list
+      if (data.allPlayers) {
+        dispatch({
+          type: 'SET_ALL_PLAYERS',
+          payload: data.allPlayers
+        });
+      }
+
+      // Update names if provided
+      if (data.names && Array.isArray(data.names)) {
+        console.log('🏷️ Updating names from player-rejoined:', data.names);
+        updateGameState({ names: data.names });
+      }
+
+      // Update game state if provided
+      if (data.gameState) {
+        updateGameState({
+          gameMode: data.gameState.gameMode,
+          gameId: data.gameState.gameId
+        });
+      }
     });
 
     channel.bind('game-started', (data) => {
-        console.log('🎮 Game started:', data);
-        updateGameState({
+      console.log('🎮 Game started:', data);
+      updateGameState({
         gameMode: 'playing',
         currentPhoto: data.photo,
         gameId: data.gameId,
@@ -222,124 +255,112 @@ export const GameProvider = ({ children }) => {
         votes: [],
         settings: data.settings || { timePerPhoto: DEFAULT_TIME_PER_ROUND },
         totalPhotos: data.totalPhotos
-        });
+      });
     });
 
-    // Dans bindPusherEvents function - CLIENT-SIDE DELAY MANAGEMENT
-
     channel.bind('round-ended', (data) => {
-        console.log('🔄 Round ended:', data);
-        updateGameState({ 
-            scores: data.scores
-        });
-        
-        // Client-side delay before processing next action
-        const delay = data.nextRoundDelay || 3000;
-        console.log(`🔄 ⏱️ Waiting ${delay}ms before next action...`);
+      console.log('🔄 Round ended:', data);
+      updateGameState({ 
+        scores: data.scores
+      });
+      
+      // Client-side delay before processing next action
+      const delay = data.nextRoundDelay || 3000;
+      console.log(`🔄 ⏱️ Waiting ${delay}ms before next action...`);
     });
 
     channel.bind('next-photo', (data) => {
-        console.log('📸 Next photo received:', data);
-        
-        // Function to apply the next photo update
-        const applyNextPhoto = () => {
-            console.log('📸 ✅ Applying next photo update...');
-            updateGameState({
-            currentPhoto: data.photo,
-            currentRound: data.round,
-            selectedAnswer: null,        // RESET voting state
-            hasVoted: false,            // RESET voting state  
-            votes: {},                  // CLEAR votes for new round
-            scores: data.scores,        // UPDATE scores
-            gameMode: data.gameMode || 'playing',
-            settings: data.settings || state.settings,
-            totalPhotos: data.totalRounds || state.totalPhotos
-          });
-          console.log(`📸 ✅ Updated to round ${data.round}, photo: ${data.photo.id}`);
-        };
-        
-        // Apply delay if specified, otherwise immediate
-        const delay = data.showDelay || 0;
-        if (delay > 0) {
-            console.log(`📸 ⏱️ Waiting ${delay}ms before showing next photo...`);
-            setTimeout(applyNextPhoto, delay);
-        } else {
-            applyNextPhoto();
-        }
+      console.log('📸 Next photo received:', data);
+      
+      // Function to apply the next photo update
+      const applyNextPhoto = () => {
+        console.log('📸 ✅ Applying next photo update...');
+        updateGameState({
+          currentPhoto: data.photo,
+          currentRound: data.round,
+          selectedAnswer: null,        // RESET voting state
+          hasVoted: false,            // RESET voting state  
+          votes: {},                  // CLEAR votes for new round
+          scores: data.scores,        // UPDATE scores
+          gameMode: data.gameMode || 'playing',
+          settings: data.settings || state.settings,
+          totalPhotos: data.totalRounds || state.totalPhotos
+        });
+        console.log(`📸 ✅ Updated to round ${data.round}, photo: ${data.photo.id}`);
+      };
+      
+      // Apply delay if specified, otherwise immediate
+      const delay = data.showDelay || 0;
+      if (delay > 0) {
+        console.log(`📸 ⏱️ Waiting ${delay}ms before showing next photo...`);
+        setTimeout(applyNextPhoto, delay);
+      } else {
+        applyNextPhoto();
+      }
     });
 
     channel.bind('game-ended', (data) => {
-        console.log('🏁 Game ended:', data);
-        
-        // Function to apply game end
-        const applyGameEnd = () => {
-            console.log('🏁 ✅ Applying game end...');
-            updateGameState({
-            gameMode: 'finished',
-            scores: data.finalScores
-            });
-        };
-        
-        // Apply delay if specified, otherwise immediate
-        const delay = data.showDelay || 0;
-        if (delay > 0) {
-            console.log(`🏁 ⏱️ Waiting ${delay}ms before showing game end...`);
-            setTimeout(applyGameEnd, delay);
-        } else {
-            applyGameEnd();
-        }
+      console.log('🏁 Game ended:', data);
+      
+      // Function to apply game end
+      const applyGameEnd = () => {
+        console.log('🏁 ✅ Applying game end...');
+        updateGameState({
+          gameMode: 'finished',
+          scores: data.finalScores
+        });
+      };
+      
+      // Apply delay if specified, otherwise immediate
+      const delay = data.showDelay || 0;
+      if (delay > 0) {
+        console.log(`🏁 ⏱️ Waiting ${delay}ms before showing game end...`);
+        setTimeout(applyGameEnd, delay);
+      } else {
+        applyGameEnd();
+      }
     });
 
     channel.bind('vote-update', (data) => {
-        console.log('🗳️ Vote update:', data);
-        updateGameState({ votes: data.votes });
-    });
-
-    channel.bind('round-ended', (data) => {
-        console.log('🔄 Round ended:', data);
-        updateGameState({ 
-            scores: data.scores
-        });
-        
-        // Client-side delay before processing next action
-        const delay = data.nextRoundDelay || 3000;
-        console.log(`🔄 ⏱️ Waiting ${delay}ms before next action...`);
+      console.log('🗳️ Vote update:', data);
+      updateGameState({ votes: data.votes });
     });
 
     channel.bind('round-error', (data) => {
-        console.error('🚨 Round error received:', data);
-        alert(`Game error: ${data.error}\nRound: ${data.round}\nPlease refresh or contact admin.`);
+      console.error('🚨 Round error received:', data);
+      alert(`Game error: ${data.error}\nRound: ${data.round}\nPlease refresh or contact admin.`);
     });
+
     channel.bind('sync-state', (data) => {
-        console.log('🔄 Syncing state:', data);
-        // Only apply if this is for us (or if no target specified)
-        if (!data.targetPlayer || data.targetPlayer === state.playerName) {
-        // NOUVEAU : Include names in sync
+      console.log('🔄 Syncing state:', data);
+      // Only apply if this is for us (or if no target specified)
+      if (!data.targetPlayer || data.targetPlayer === state.playerName) {
+        // Include names in sync
         const syncData = { ...data.gameState };
         if (data.gameState.names) {
-            console.log('🏷️ Updating names from sync-state:', data.gameState.names);
+          console.log('🏷️ Updating names from sync-state:', data.gameState.names);
         }
         updateGameState(syncData);
-        }
+      }
     });
 
     channel.bind('game-reset', (data) => {
-        console.log('🔄 Game reset:', data);
-        dispatch({ type: 'RESET_GAME' });
-        // Optionally show a message to user
-        if (data.message) {
+      console.log('🔄 Game reset:', data);
+      dispatch({ type: 'RESET_GAME' });
+      // Optionally show a message to user
+      if (data.message) {
         console.log('Game reset:', data.message);
-        }
+      }
     });
 
     channel.bind('player-left', (data) => {
-        console.log('🚪 Player left:', data);
-        updateGameState({
+      console.log('🚪 Player left:', data);
+      updateGameState({
         players: data.remainingPlayers,
         scores: data.scores
-        });
+      });
     });
-    };
+  };
 
   const loadPhotos = async () => {
     try {
@@ -435,34 +456,35 @@ export const GameProvider = ({ children }) => {
 
     refreshPhotos: loadPhotos,
 
-    // Game management
-    joinGame: async (playerName) => {
-        try {
-        const result = await apiService.joinGame(playerName);
+    // Game management - Updated to support rejoin
+    joinGame: async (playerName, isRejoin = false) => {
+      try {
+        console.log(`🎮 GameContext joinGame called: ${playerName}, rejoin: ${isRejoin}`);
+        const result = await apiService.joinGame(playerName, isRejoin);
         
-        // NOUVEAU : Update names from join response
+        // Update names from join response
         const updateData = {
-            hasJoined: true,
-            playerName,
-            gameId: result.gameId,
-            gameMode: result.gameMode,
-            players: result.players || state.players,
-            scores: result.scores || state.scores
+          hasJoined: true,
+          playerName,
+          gameId: result.gameId,
+          gameMode: result.gameMode,
+          players: result.players || state.players,
+          scores: result.scores || state.scores
         };
 
         // Include real names if provided
         if (result.names && Array.isArray(result.names)) {
-            console.log('🏷️ Updating names from join response:', result.names);
-            updateData.names = result.names;
+          console.log('🏷️ Updating names from join response:', result.names);
+          updateData.names = result.names;
         }
 
         updateGameState(updateData);
 
         return result;
-        } catch (error) {
+      } catch (error) {
         console.error('Failed to join game:', error);
         throw error;
-        }
+      }
     },
 
     startGame: async (settings) => {
@@ -606,7 +628,11 @@ export const GameProvider = ({ children }) => {
   };
 
   return (
-    <GameContext.Provider value={{ gameState: state, actions }}>
+    <GameContext.Provider value={{ 
+      gameState: state, 
+      actions,
+      onlineStatus: state.onlineStatus
+    }}>
       {children}
     </GameContext.Provider>
   );
