@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Pusher from 'pusher-js';
+import { PUSHER_ID } from '../constants';
 
 export const useRealtimeVotes = (gameState) => {
   const [liveVotes, setLiveVotes] = useState({});
@@ -15,7 +16,7 @@ export const useRealtimeVotes = (gameState) => {
       try {
         console.log('[ADMIN] 🚀 Setting up Pusher connection...');
         
-        pusher = new Pusher('c9eb0b76bcbe61c6a397', {
+        pusher = new Pusher(PUSHER_ID, {
           cluster: 'eu',
           encrypted: true
         });

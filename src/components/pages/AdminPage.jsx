@@ -10,12 +10,14 @@ import PlayersManager from './admin/PlayersManager';
 import GameController from './admin/GameController';
 import PhotosManager from './admin/PhotosManager';
 
+import { DEFAULT_TIME_PER_ROUND } from '../../constants';
+
 const AdminPage = () => {
   const { gameState, actions } = useGame();
   
   // FIX: Initialisation correcte avec valeurs par défaut et synchronisation
   const [gameSettings, setGameSettings] = useState({
-    timePerPhoto: 10,
+    timePerPhoto: DEFAULT_TIME_PER_ROUND,
     ...gameState.gameSettings
   });
   

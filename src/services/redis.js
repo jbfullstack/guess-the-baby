@@ -1,6 +1,8 @@
 // Redis service for real-time game state - FIXED UPSTASH BUG
 import { Redis } from '@upstash/redis';
 
+import { DEFAULT_TIME_PER_ROUND } from '../constants';
+
 // Initialize Redis client
 const redis = Redis.fromEnv();
 
@@ -68,7 +70,7 @@ export const GameStateRedis = {
         totalPhotos: parseInt(totalPhotos) || 0,
         startTime: startTime || null,
         selectedPhotos: safeJsonParse(selectedPhotos, []),
-        settings: safeJsonParse(settings, { timePerPhoto: 10 }),
+        settings: safeJsonParse(settings, { timePerPhoto: DEFAULT_TIME_PER_ROUND }),
         roundStartTime: roundStartTime || null,
         winner: winner || null,
         endedAt: endedAt || null
@@ -91,7 +93,7 @@ export const GameStateRedis = {
         totalPhotos: 0,
         startTime: null,
         selectedPhotos: [],
-        settings: { timePerPhoto: 10 }
+        settings: { timePerPhoto: DEFAULT_TIME_PER_ROUND }
       };
     }
   },

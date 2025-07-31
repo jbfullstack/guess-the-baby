@@ -1,6 +1,8 @@
 import { GameStateRedis, PlayersRedis, ScoresRedis, VotesRedis } from '../src/services/redis.js';
 import { Octokit } from '@octokit/rest';
 
+import { DEFAULT_TIME_PER_ROUND } from '../src/constants.js';
+
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 });
@@ -35,7 +37,7 @@ export default async function handler(req, res) {
         totalPhotos: game.photosUsed || game.totalRounds || 0,
         photosUsed: game.photosUsed || game.totalRounds || 0,
         duration: game.duration || 'Unknown',
-        settings: game.settings || { timePerPhoto: 10 },
+        settings: game.settings || { timePerPhoto: DEFAULT_TIME_PER_ROUND },
         finalScores: game.players ? 
           game.players.reduce((acc, player) => {
             acc[player.name] = player.score;
@@ -107,7 +109,7 @@ export default async function handler(req, res) {
     }
 
     // Parse settings safely
-    let gameSettings = gameState.settings || { timePerPhoto: 10 };
+    let gameSettings = gameState.settings || { timePerPhoto: DEFAULT_TIME_PER_ROUND };
     if (gameState.settings) {
       try {
         if (typeof gameState.settings === 'string') {

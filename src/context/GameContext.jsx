@@ -1,6 +1,9 @@
 import React, { createContext, useState, useEffect, useReducer } from 'react';
 import Pusher from 'pusher-js';
 import apiService from '../services/api';
+import { PUSHER_ID } from '../constants';
+
+import { DEFAULT_TIME_PER_ROUND } from '../constants';
 
 export const GameContext = createContext();
 
@@ -89,7 +92,7 @@ const initialGameState = {
   names: ['Alice', 'Bob', 'Charlie', 'Diana'],
   scores: {},
   gameSettings: {
-    timePerPhoto: 10
+    timePerPhoto: DEFAULT_TIME_PER_ROUND
   },
   gameHistory: [],
   isConnected: false,
@@ -136,7 +139,7 @@ export const GameProvider = ({ children }) => {
     try {
       console.log('🚀 Initializing Pusher...');
       
-      const realPusher = new Pusher('c9eb0b76bcbe61c6a397', {
+      const realPusher = new Pusher(PUSHER_ID, {
         cluster: 'eu',
         encrypted: true
       });
@@ -218,7 +221,7 @@ export const GameProvider = ({ children }) => {
         currentRound: data.currentRound || 1,
         selectedAnswer: null,
         votes: [],
-        settings: data.settings || { timePerPhoto: 10 },
+        settings: data.settings || { timePerPhoto: DEFAULT_TIME_PER_ROUND },
         totalPhotos: data.totalPhotos
         });
     });

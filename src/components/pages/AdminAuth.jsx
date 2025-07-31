@@ -4,15 +4,14 @@ import { useGame } from '../../hooks/useGame';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 
+import { ADMIN_PASSWORD } from '../../constants';
+
 const AdminAuth = () => {
   const { actions } = useGame();
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  // Admin password - in production, this should be environment variable
-  const ADMIN_PASSWORD = 'baby2025'; // Change this to your preferred password
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -85,7 +84,7 @@ const AdminAuth = () => {
 
         <div className="mt-6 text-center">
           <p className="text-xs text-gray-400">
-            Demo password: <span className="text-purple-400">baby2025</span>
+            Demo password: <span className="text-purple-400">{ ADMIN_PASSWORD }</span>
           </p>
         </div>
       </Card>

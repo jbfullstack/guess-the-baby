@@ -1,6 +1,8 @@
 import Pusher from 'pusher';
 import { GameStateRedis, VotesRedis, ScoresRedis, PlayersRedis } from '../src/services/redis.js';
 
+import { DEFAULT_TIME_PER_ROUND } from '../src/constants.js';
+
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID,
   key: process.env.PUSHER_KEY,
@@ -66,7 +68,7 @@ export default async function handler(req, res) {
 
     const currentRound = parseInt(gameState.currentRound) || 1;
     const selectedPhotos = gameState.selectedPhotos || [];
-    const gameSettings = gameState.settings || { timePerPhoto: 10 };
+    const gameSettings = gameState.settings || { timePerPhoto: DEFAULT_TIME_PER_ROUND };
 
     console.log(`[VOTE] 📊 Game state: round ${currentRound}/${selectedPhotos.length}, photos: ${selectedPhotos.length}`);
 
@@ -272,11 +274,11 @@ export default async function handler(req, res) {
             url: nextPhoto.url
           },
           round: nextRound,
-          totalRounds: selectedPhotos.length,
+          totalRounds: selectedPhotos.lengtapplyNextPhoto,
           scores: scores,
           gameMode: 'playing',
           showDelay: 3000,
-          settings: gameSettings || { timePerPhoto: 10 }
+          settings: gameSettings || { timePerPhoto: DEFAULT_TIME_PER_ROUND }
         });
         
         console.log(`[VOTE] 📤➡️ Next photo event sent for round ${nextRound}`);
@@ -336,7 +338,7 @@ async function saveGameToGitHubHistory(gameState, scores, totalRounds, players) 
     console.log('[HISTORY] 📡 GitHub client initialized');
 
     // 🔧 CRITICAL FIX: Parse settings properly (was causing the bug!)
-    let parsedSettings = { timePerPhoto: 10 };
+    let parsedSettings = { timePerPhoto: DEFAULT_TIME_PER_ROUND };
     try {
       if (typeof gameState.settings === 'string') {
         parsedSettings = JSON.parse(gameState.settings);
