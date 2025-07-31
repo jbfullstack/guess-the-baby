@@ -53,7 +53,30 @@ export default async function handler(req, res) {
 
     // 4. Initialize scores for all players
     const playerNames = players.map(p => p.name);
-    await ScoresRedis.initializeScores(playerNames);
+    console.log('[START] 🎯 About to initialize scores for:', playerNames);
+    console.log('[START] 🔍 Player names type check:', playerNames.map(name => ({ name, type: typeof name, length: name?.length })));
+
+    // Clear any existing scores first (CRITICAL FIX)
+    await ScoresRedis.resetScores();
+    console.log('[START] 🧹 Cleared existing scores');
+
+    // Initialize with validation
+    const initializedScores = await ScoresRedis.initializeScores(playerNames);
+    console.log('[START] ✅ Scores initialized:', initializedScores);
+
+    // Double-check what's actually in Redis
+    const verificationScores = await ScoresRedis.getScores();
+    console.log('[START] 🔍 Redis verification:', verificationScores);
+
+    if (Object.keys(verificationScores).some(key => /^[0-9]+$/.test(key))) {
+      console.error('[START] 🚨 GHOST PLAYERS DETECTED AFTER INITIALIZATION!');
+      console.error('[START] 🚨 Expected:', playerNames);
+      console.error('[START] 🚨 Got:', Object.keys(verificationScores));
+      
+      // Emergency cleanup
+      await ScoresRedis.resetScores();
+      throw new Error('Ghost players detected during score initialization');
+    }
 
     // 5. Set up vote counting for round 1
     await VotesRedis.setTotalPlayers(1, players.length);

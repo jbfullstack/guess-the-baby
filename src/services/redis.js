@@ -369,18 +369,52 @@ export const ScoresRedis = {
 
   // Initialize scores for players
   async initializeScores(playerNames) {
-    const pipeline = redis.pipeline();
-    playerNames.forEach(name => {
-      pipeline.hset('game:scores', name, 0);
-    });
-    pipeline.expire('game:scores', 7200);
-    await pipeline.exec();
-    
-    return playerNames.reduce((acc, name) => {
-      acc[name] = 0;
-      return acc;
-    }, {});
-  }
+    try {
+      console.log('[SCORES] 🚀 Initializing scores for players:', playerNames);
+      
+      // 🔥 CRITICAL: Clear existing scores first to avoid corruption
+      console.log('[SCORES] 🧹 Clearing existing scores...');
+      await redis.del('game:scores');
+      
+      if (!playerNames || playerNames.length === 0) {
+        console.log('[SCORES] ⚠️ No players to initialize');
+        return {};
+      }
+      
+      // 🔥 FIX: Use individual SET commands instead of pipeline to avoid Redis issues
+      console.log('[SCORES] 📝 Setting individual scores...');
+      
+      for (const name of playerNames) {
+        if (name && typeof name === 'string' && name.trim().length > 0) {
+          const cleanName = name.trim();
+          console.log(`[SCORES] 🎯 Setting score for: "${cleanName}"`);
+          await redis.hset('game:scores', cleanName, 0);
+        } else {
+          console.warn(`[SCORES] ⚠️ Skipping invalid player name:`, name);
+        }
+      }
+      
+      // Set expiration
+      await redis.expire('game:scores', 7200);
+      
+      // Verify what was actually set
+      const actualScores = await redis.hgetall('game:scores');
+      console.log('[SCORES] ✅ Actual scores after initialization:', actualScores);
+      
+      // Convert string values back to numbers for return
+      const numericScores = {};
+      Object.entries(actualScores || {}).forEach(([name, score]) => {
+        numericScores[name] = parseInt(score) || 0;
+      });
+      
+      console.log('[SCORES] 🎯 Final scores object:', numericScores);
+      return numericScores;
+      
+    } catch (error) {
+      console.error('[SCORES] ❌ Error initializing scores:', error);
+      throw error;
+    }
+  },
 };
 
 export const VotesRedis = {
