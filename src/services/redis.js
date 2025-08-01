@@ -25,7 +25,8 @@ export const GameStateRedis = {
         settings,
         roundStartTime,
         winner,
-        endedAt
+        endedAt,
+        preloadingPlayers
       ] = await Promise.all([
         redis.get('game:id'),
         redis.get('game:mode'),
