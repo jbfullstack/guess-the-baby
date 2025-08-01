@@ -392,8 +392,30 @@ async function handlePreloadComplete(playerName, gameId, res, startTime) {
       
       try {
         // Parse selected photos for game start
-        const selectedPhotos = JSON.parse(gameState.selectedPhotos || '[]');
-        const gameSettings = JSON.parse(gameState.settings || '{}');
+        let selectedPhotos = [];
+        let gameSettings = {};
+        
+        // Handle selectedPhotos
+        if (gameState.selectedPhotos) {
+          if (typeof gameState.selectedPhotos === 'object' && Array.isArray(gameState.selectedPhotos)) {
+            selectedPhotos = gameState.selectedPhotos;
+            console.log('[PRELOAD] 📷 Using existing photos array:', selectedPhotos.length);
+          } else if (typeof gameState.selectedPhotos === 'string') {
+            selectedPhotos = JSON.parse(gameState.selectedPhotos);
+            console.log('[PRELOAD] 📝 Parsed photos from string:', selectedPhotos.length);
+          }
+        }
+        
+        // Handle settings
+        if (gameState.settings) {
+          if (typeof gameState.settings === 'object' && gameState.settings !== null && !Array.isArray(gameState.settings)) {
+            gameSettings = gameState.settings;
+            console.log('[PRELOAD] ⚙️ Using existing settings object:', gameSettings);
+          } else if (typeof gameState.settings === 'string') {
+            gameSettings = JSON.parse(gameState.settings);
+            console.log('[PRELOAD] 📝 Parsed settings from string:', gameSettings);
+          }
+        }
         
         if (selectedPhotos.length === 0) {
           throw new Error('No photos available for game start');
