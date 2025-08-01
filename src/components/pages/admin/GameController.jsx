@@ -55,13 +55,19 @@ const GameController = ({
   const totalVotes = liveVoteCount || displayVotes.length;
   const totalPlayers = liveTotalPlayers || gameState.players.length;
 
+  // Game status for collapsed title
+  const gameStatus = gameState.gameMode === 'playing' ? 'Playing' : 
+                    gameState.gameMode === 'finished' ? 'Finished' : 
+                    gameState.gameMode === 'waiting' ? 'Ready' : 'Paused';
+
   return (
-    <Card>
-      <div className="flex items-center space-x-2 mb-4">
-        <Play className="w-5 h-5 text-purple-400" />
-        <h2 className="text-xl font-semibold text-white">Game Control</h2>
-      </div>
-      
+    <Card
+      title="Game Control"
+      collapsedTitle={`Game Control (${selectedPhotos.length} photos, ${gameStatus})`}
+      collapsibleOnlyOnMobile={true}
+      defaultExpanded={true}
+      icon={<Play className="w-5 h-5" />}
+    >
       <div className="space-y-3">
         <div className="bg-white/5 rounded-lg p-3">
           <p className="text-sm text-gray-300 mb-1">Selected Photos</p>

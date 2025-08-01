@@ -7,27 +7,32 @@ const PlayersManager = ({ gameState, playerManager }) => {
   const { removePlayer, clearAllPlayers } = playerManager;
 
   return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <Users className="w-5 h-5 text-purple-400" />
-          <h2 className="text-xl font-semibold text-white">
-            Players ({gameState.players.length})
-          </h2>
-        </div>
-        
-        {gameState.players.length > 0 && (
-          <div className="flex space-x-2">
+    <Card
+      title={`Players`}
+      collapsedTitle={`Players (${gameState.players.length})`}
+      collapsibleOnlyOnMobile={true}
+      defaultExpanded={true}
+      icon={<Users className="w-5 h-5" />}
+    >
+      {/* Description and Clear All Button */}
+      <div className="mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-gray-400 text-sm">
+            Manage connected players and their scores
+          </p>
+          {gameState.players.length > 0 && (
             <Button 
               size="sm" 
               variant="danger" 
               onClick={clearAllPlayers}
               title="Remove all players (keeps game state)"
+              className="self-start sm:self-auto flex-shrink-0"
             >
+              <Trash2 className="w-4 h-4 mr-1" />
               Clear All
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       
       <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -71,7 +76,7 @@ const PlayersManager = ({ gameState, playerManager }) => {
             </div>
           ))
         ) : (
-          <div className="text-center py-12">
+          <div className="text-center py-8">
             <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
             <p className="text-gray-400 mb-2">No players joined yet</p>
             <p className="text-gray-500 text-sm">Players will appear here when they join the game</p>
@@ -81,12 +86,12 @@ const PlayersManager = ({ gameState, playerManager }) => {
       
       {gameState.players.length > 0 && (
         <div className="mt-4 pt-3 border-t border-white/10">
-          <div className="flex items-center justify-between text-sm text-gray-400">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-400">
             <span>
               Total: {gameState.players.length} player{gameState.players.length !== 1 ? 's' : ''}
             </span>
-            <span>
-              Hover to remove individual players
+            <span className="text-xs">
+              Hover to remove • Green dot = online
             </span>
           </div>
         </div>

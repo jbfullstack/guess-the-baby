@@ -22,24 +22,21 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
   } = photoManager;
 
   return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <Image className="w-5 h-5 text-purple-400" />
-          <div>
-            <h2 className="text-xl font-semibold text-white">
-              Manage Photos ({selectedPhotos.length}/{photoOrder.length} selected)
-            </h2>
-            <p className="text-sm text-gray-400">Select, edit names, delete photos, and arrange game order</p>
-          </div>
-        </div>
-        
-        <div className="flex space-x-2">
+    <Card
+      title={`Manage Photos`}
+      collapsedTitle={`Manage Photos (${selectedPhotos.length}/${photoOrder.length} selected)`}
+      collapsible={true}
+      defaultExpanded={true}
+      icon={<Image className="w-5 h-5" />}
+    >
+      {/* Action Buttons */}
+      <div className="mb-4">
+        {/* Desktop Layout (md and up) */}
+        <div className="hidden md:flex space-x-2">
           <Button 
             size="sm" 
             variant="secondary" 
             onClick={shufflePhotos}
-            title="Randomize the order that photos will appear in the game"
           >
             <Shuffle className="w-4 h-4 mr-1" />
             Shuffle Order
@@ -48,7 +45,6 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
             size="sm" 
             variant="secondary" 
             onClick={resetOrder}
-            title="Reset to original upload order"
           >
             Reset Order
           </Button>
@@ -57,6 +53,50 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
           </Button>
           <Button size="sm" variant="danger" onClick={clearAllPhotos}>
             Clear All
+          </Button>
+        </div>
+
+        {/* Mobile Layout (below md) */}
+        <div className="md:hidden flex flex-wrap gap-2">
+          <Button 
+            size="sm" 
+            variant="secondary" 
+            onClick={shufflePhotos}
+            className="flex-1 min-w-[120px]"
+          >
+            <Shuffle className="w-4 h-4 mr-2" />
+            <span className="hidden xs:inline">Shuffle Order</span>
+            <span className="xs:hidden">Shuffle</span>
+          </Button>
+          
+          <Button 
+            size="sm" 
+            variant="secondary" 
+            onClick={resetOrder}
+            className="flex-1 min-w-[100px]"
+          >
+            <span className="hidden xs:inline">Reset Order</span>
+            <span className="xs:hidden">Reset</span>
+          </Button>
+          
+          <Button 
+            size="sm" 
+            variant="secondary" 
+            onClick={selectAllPhotos}
+            className="flex-1 min-w-[90px]"
+          >
+            <span className="hidden xs:inline">Select All</span>
+            <span className="xs:hidden">All</span>
+          </Button>
+          
+          <Button 
+            size="sm" 
+            variant="danger" 
+            onClick={clearAllPhotos}
+            className="flex-1 min-w-[90px]"
+          >
+            <span className="hidden xs:inline">Clear All</span>
+            <span className="xs:hidden">Clear</span>
           </Button>
         </div>
       </div>
@@ -68,31 +108,22 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
         </div>
       )}
       
-      {/* Instructions */}
+      {/* Quick Instructions */}
       <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
-        <div className="flex items-start space-x-2">
-          <Image className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
-          <div className="text-sm">
-            <p className="text-blue-400 font-medium mb-1">Photo Management:</p>
-            <div className="text-blue-300 space-y-1">
-              <p>• <strong>Click checkmark:</strong> Select/deselect for game</p>
-              <p>• <strong>Hover & click edit (✏️):</strong> Change person's name</p>
-              <p>• <strong>Hover & click delete (🗑️):</strong> Remove photo permanently</p>
-              <p>• <strong>Order matters:</strong> #1 will be shown first in the game</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Game Preview */}
-      <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-4">
-        <p className="text-purple-400 text-sm text-center">
-          📋 <strong>Game Preview:</strong> Photos will appear in the exact order shown below ({photoOrder.filter(photo => selectedPhotos.includes(photo.id)).length} selected)
+        <p className="text-blue-300 text-sm">
+          <strong>Quick Guide:</strong> Click ✓ to select • ✏️ to edit names • 🗑️ to delete • Drag to reorder
         </p>
       </div>
       
-      {/* Photo Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {/* Game Preview - Simplified */}
+      <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2 mb-4">
+        <p className="text-purple-400 text-sm text-center">
+          🎮 <strong>{photoOrder.filter(photo => selectedPhotos.includes(photo.id)).length}</strong> photos will appear in game order
+        </p>
+      </div>
+      
+      {/* Photo Grid - Responsive */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
         {photoOrder.map((photo, index) => (
           <div 
             key={photo.id}
@@ -104,7 +135,7 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
           >
             {/* Order Number */}
             {selectedPhotos.includes(photo.id) && (
-              <div className="absolute top-2 left-2 bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
+              <div className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-purple-600 text-white text-xs font-bold px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full z-10">
                 #{photoOrder.filter((p, i) => i <= index && selectedPhotos.includes(p.id)).length}
               </div>
             )}
@@ -112,19 +143,19 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
             <img 
               src={photo.url} 
               alt={`Baby photo of ${photo.person}`}
-              className={`w-full h-32 object-cover transition-all ${
+              className={`w-full h-24 sm:h-32 object-cover transition-all ${
                 selectedPhotos.includes(photo.id) ? '' : 'grayscale group-hover:grayscale-0'
               }`}
             />
             
-            {/* Action Buttons */}
-            <div className="absolute top-2 right-2 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Action Buttons - Mobile Optimized */}
+            <div className="absolute top-1 right-1 sm:top-2 sm:right-2 flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   togglePhotoSelection(photo.id);
                 }}
-                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                className={`w-6 h-6 sm:w-6 sm:h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                   selectedPhotos.includes(photo.id)
                     ? 'bg-purple-400 border-purple-400'
                     : 'bg-white/20 border-white/50 hover:border-purple-400'
@@ -181,19 +212,21 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
                       className="flex-1 bg-green-500/80 hover:bg-green-500 text-white text-xs py-1 rounded transition-colors flex items-center justify-center"
                     >
                       <Save className="w-3 h-3 mr-1" />
-                      Save
+                      <span className="hidden xs:inline">Save</span>
+                      <span className="xs:hidden">✓</span>
                     </button>
                     <button
                       onClick={cancelEdit}
-                      className="flex-1 bg-gray-500/80 hover:bg-gray-500 text-white text-xs py-1 rounded transition-colors"
+                      className="flex-1 bg-gray-500/80 hover:bg-gray-500 text-white text-xs py-1 rounded transition-colors text-center"
                     >
-                      Cancel
+                      <span className="hidden xs:inline">Cancel</span>
+                      <span className="xs:hidden">✕</span>
                     </button>
                   </div>
                 </div>
               ) : (
                 <div>
-                  <p className="text-white text-xs font-medium">{photo.person}</p>
+                  <p className="text-white text-xs font-medium truncate">{photo.person}</p>
                 </div>
               )}
             </div>
@@ -202,10 +235,10 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
       </div>
       
       {photoOrder.length === 0 && (
-        <div className="text-center py-12">
-          <Image className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-400 mb-2">No photos uploaded yet</p>
-          <p className="text-gray-500 text-sm">Photos will appear here when users upload them</p>
+        <div className="text-center py-8 sm:py-12">
+          <Image className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-400 mb-2 text-sm sm:text-base">No photos uploaded yet</p>
+          <p className="text-gray-500 text-xs sm:text-sm">Photos will appear here when users upload them</p>
         </div>
       )}
     </Card>
