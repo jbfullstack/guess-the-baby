@@ -348,10 +348,18 @@ async function handlePreloadComplete(playerName, gameId, res, startTime) {
     let preloadingPlayers = {};
     try {
       if (gameState.preloadingPlayers) {
-        preloadingPlayers = JSON.parse(gameState.preloadingPlayers);
+        // Check if it's already an object (parsed by Redis service)
+        if (typeof gameState.preloadingPlayers === 'object' && gameState.preloadingPlayers !== null) {
+          preloadingPlayers = gameState.preloadingPlayers;
+          console.log('[PRELOAD] 📦 Using existing object:', preloadingPlayers);
+        } else if (typeof gameState.preloadingPlayers === 'string') {
+          preloadingPlayers = JSON.parse(gameState.preloadingPlayers);
+          console.log('[PRELOAD] 📝 Parsed from string:', preloadingPlayers);
+        }
       }
     } catch (error) {
-      console.warn('[PRELOAD] Failed to parse preloadingPlayers, using empty object');
+      console.warn('[PRELOAD] Failed to parse preloadingPlayers, using empty object:', error.message);
+      preloadingPlayers = {};
     }
     
     // Add this player to ready list
