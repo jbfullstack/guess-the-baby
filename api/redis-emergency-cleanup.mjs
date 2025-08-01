@@ -1,270 +1,165 @@
-// 🚨 ENDPOINT D'URGENCE - redis-emergency-cleanup.mjs
-import { RedisRecovery } from '../src/services/redis-helpers.js';
+// 🚨 URGENT : Créer ce fichier → api/redis-emergency-cleanup.mjs
+// Version ultra-simple sans dépendances
+
 import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
 
 export default async function handler(req, res) {
-  // Allow both GET and POST for emergency access
-  if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   const startTime = Date.now();
 
   try {
-    console.log('🚨 EMERGENCY CLEANUP INITIATED');
+    console.log('🚨 EMERGENCY CLEANUP - Starting...');
 
-    const cleanupReport = {
+    // CORS pour appel depuis navigateur
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+
+    const report = {
       timestamp: new Date().toISOString(),
       actions: [],
       errors: [],
-      recovered: 0,
-      cleaned: 0
+      totalKeys: 0,
+      deletedKeys: 0
     };
 
     // 1. Test Redis connection
     try {
-      await redis.ping();
-      cleanupReport.actions.push('✅ Redis connection OK');
+      const pingResult = await redis.ping();
+      report.actions.push(`✅ Redis ping: ${pingResult}`);
     } catch (error) {
-      cleanupReport.errors.push(`❌ Redis connection failed: ${error.message}`);
-      return res.json({
+      report.errors.push(`❌ Redis connection failed: ${error.message}`);
+      return res.status(503).json({
         success: false,
         error: 'Redis connection failed',
-        report: cleanupReport,
+        report,
         responseTime: `${Date.now() - startTime}ms`
       });
     }
 
-    // 2. Cleanup corrupted data
+    // 2. Get all relevant keys
+    let allKeys = [];
     try {
-      const cleanupResult = await RedisRecovery.cleanupCorruptedData();
-      cleanupReport.cleaned = cleanupResult.cleaned;
-      cleanupReport.actions.push(`🧹 Cleaned ${cleanupResult.cleaned} corrupted keys`);
-    } catch (error) {
-      cleanupReport.errors.push(`❌ Cleanup failed: ${error.message}`);
-    }
-
-    // 3. Validate remaining data
-    try {
-      const gameKeys = await redis.keys('game:*');
-      const scoreKeys = await redis.keys('score:*');
-      const voteKeys = await redis.keys('vote:*');
+      const gameKeys = await redis.keys('game:*') || [];
+      const scoreKeys = await redis.keys('score:*') || [];
+      const voteKeys = await redis.keys('vote:*') || [];
+      const playerKeys = await redis.keys('players:*') || [];
       
-      cleanupReport.actions.push(`📊 Found ${gameKeys.length} game keys, ${scoreKeys.length} score keys, ${voteKeys.length} vote keys`);
-
-      // Test each remaining key
-      let validKeys = 0;
-      let invalidKeys = 0;
-
-      for (const key of [...gameKeys, ...scoreKeys, ...voteKeys]) {
-        try {
-          const value = await redis.get(key);
-          if (value !== null) {
-            validKeys++;
-          }
-        } catch (error) {
-          invalidKeys++;
-          cleanupReport.errors.push(`❌ Invalid key ${key}: ${error.message}`);
-          // Try to delete invalid key
-          try {
-            await redis.del(key);
-            cleanupReport.actions.push(`🗑️ Deleted invalid key: ${key}`);
-          } catch (delError) {
-            cleanupReport.errors.push(`❌ Failed to delete ${key}: ${delError.message}`);
-          }
-        }
-      }
-
-      cleanupReport.actions.push(`✅ Validated ${validKeys} keys, removed ${invalidKeys} invalid keys`);
-
+      allKeys = [...gameKeys, ...scoreKeys, ...voteKeys, ...playerKeys];
+      report.totalKeys = allKeys.length;
+      report.actions.push(`📊 Found ${allKeys.length} keys total`);
+      report.actions.push(`  - Game keys: ${gameKeys.length}`);
+      report.actions.push(`  - Score keys: ${scoreKeys.length}`);
+      report.actions.push(`  - Vote keys: ${voteKeys.length}`);
+      report.actions.push(`  - Player keys: ${playerKeys.length}`);
     } catch (error) {
-      cleanupReport.errors.push(`❌ Validation failed: ${error.message}`);
+      report.errors.push(`❌ Failed to get keys: ${error.message}`);
     }
 
-    // 4. Emergency reset if requested
-    if (req.query.reset === 'true' || req.body?.reset === true) {
+    // 3. Emergency reset if requested
+    const shouldReset = req.query.reset === 'true' || req.body?.reset === true;
+    
+    if (shouldReset && allKeys.length > 0) {
       try {
-        cleanupReport.actions.push('🚨 EMERGENCY RESET REQUESTED');
+        report.actions.push('🚨 EMERGENCY RESET REQUESTED - DELETING ALL GAME DATA');
         
-        const allKeys = await redis.keys('game:*', 'score:*', 'vote:*', 'players:*');
-        if (allKeys.length > 0) {
-          await redis.del(...allKeys);
-          cleanupReport.actions.push(`💥 Emergency reset: deleted ${allKeys.length} keys`);
+        // Delete in batches to avoid timeout
+        const batchSize = 50;
+        for (let i = 0; i < allKeys.length; i += batchSize) {
+          const batch = allKeys.slice(i, i + batchSize);
+          await redis.del(...batch);
+          report.deletedKeys += batch.length;
+          report.actions.push(`🗑️ Deleted batch ${Math.floor(i/batchSize) + 1}: ${batch.length} keys`);
         }
+        
+        report.actions.push(`💥 RESET COMPLETE: ${report.deletedKeys} keys deleted`);
       } catch (error) {
-        cleanupReport.errors.push(`❌ Emergency reset failed: ${error.message}`);
+        report.errors.push(`❌ Reset failed: ${error.message}`);
+      }
+    } else if (!shouldReset) {
+      report.actions.push('ℹ️ No reset requested - use ?reset=true to delete all data');
+    }
+
+    // 4. Validate remaining data (only if no reset)
+    if (!shouldReset && allKeys.length > 0) {
+      try {
+        let validKeys = 0;
+        let corruptedKeys = 0;
+        
+        // Test a few random keys to check for corruption
+        const samplesToTest = Math.min(10, allKeys.length);
+        const randomKeys = allKeys.sort(() => 0.5 - Math.random()).slice(0, samplesToTest);
+        
+        for (const key of randomKeys) {
+          try {
+            const value = await redis.get(key);
+            if (value !== null) {
+              // Try to parse if it looks like JSON
+              if (typeof value === 'string' && (value.trim().startsWith('{') || value.trim().startsWith('['))) {
+                JSON.parse(value); // Will throw if corrupted
+              }
+              validKeys++;
+            }
+          } catch (parseError) {
+            corruptedKeys++;
+            report.actions.push(`🔧 Found corrupted key: ${key}`);
+            
+            // Delete corrupted key
+            try {
+              await redis.del(key);
+              report.actions.push(`🗑️ Deleted corrupted key: ${key}`);
+              report.deletedKeys++;
+            } catch (delError) {
+              report.errors.push(`❌ Failed to delete corrupted key ${key}: ${delError.message}`);
+            }
+          }
+        }
+        
+        report.actions.push(`🔍 Tested ${samplesToTest} keys: ${validKeys} valid, ${corruptedKeys} corrupted`);
+      } catch (error) {
+        report.errors.push(`❌ Validation failed: ${error.message}`);
       }
     }
 
+    // 5. Final status
     const responseTime = Date.now() - startTime;
-    const isHealthy = cleanupReport.errors.length === 0;
+    const isHealthy = report.errors.length === 0;
+    
+    console.log('🚨 EMERGENCY CLEANUP COMPLETED:', report);
 
-    console.log('🚨 EMERGENCY CLEANUP COMPLETED:', cleanupReport);
-
-    res.json({
+    return res.status(200).json({
       success: isHealthy,
-      message: isHealthy ? 'Cleanup completed successfully' : 'Cleanup completed with errors',
-      report: cleanupReport,
+      message: shouldReset ? 
+        `Emergency reset completed - deleted ${report.deletedKeys} keys` :
+        `Cleanup completed - found ${report.totalKeys} keys`,
+      report,
       responseTime: `${responseTime}ms`,
-      recommendations: isHealthy ? 
-        ['Redis is healthy'] : 
-        [
-          'Consider restarting the application',
-          'Check Redis logs for connection issues',
-          'Use ?reset=true for complete reset if issues persist'
-        ]
+      nextSteps: shouldReset ? [
+        '✅ Redis cleaned - your app should work now',
+        '🎮 Try joining a game to test',
+        '📊 Check app functionality'
+      ] : [
+        '🔧 Run with ?reset=true to delete all data if issues persist',
+        '📊 Check the report above for any corrupted keys found',
+        '🎮 Test your app functionality'
+      ]
     });
 
   } catch (error) {
-    console.error('🚨 EMERGENCY CLEANUP FAILED:', error);
+    console.error('🚨 EMERGENCY CLEANUP CRASHED:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Emergency cleanup failed',
       details: error.message,
       responseTime: `${Date.now() - startTime}ms`,
-      action: 'Try again or contact support'
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      action: 'Contact support or try manual Redis cleanup'
     });
   }
 }
-
-// --------------------------------------------------------
-// 🛡️ MIDDLEWARE DE GESTION D'ERREUR GLOBAL - error-handler.js
-
-export class GlobalErrorHandler {
-  static handleApiError(error, req, res, endpoint) {
-    const errorId = Date.now().toString();
-    
-    console.error(`[ERROR-${errorId}] 🚨 API Error in ${endpoint}:`, {
-      error: error.message,
-      stack: error.stack,
-      method: req.method,
-      url: req.url,
-      body: req.body,
-      timestamp: new Date().toISOString()
-    });
-
-    // Determine error type and response
-    let statusCode = 500;
-    let errorResponse = {
-      success: false,
-      errorId,
-      timestamp: new Date().toISOString(),
-      endpoint
-    };
-
-    if (error.message.includes('Redis')) {
-      statusCode = 503;
-      errorResponse.error = 'Database connection issue';
-      errorResponse.details = 'Redis service temporarily unavailable';
-      errorResponse.action = 'Try again in a moment or use /api/redis-emergency-cleanup';
-    } else if (error.message.includes('JSON')) {
-      statusCode = 422;
-      errorResponse.error = 'Data format error';
-      errorResponse.details = 'Invalid data detected in storage';
-      errorResponse.action = 'Run cleanup: /api/redis-emergency-cleanup';
-    } else if (error.message.includes('already taken')) {
-      statusCode = 400;
-      errorResponse.error = error.message;
-      errorResponse.action = 'Try a different name or rejoin';
-    } else if (error.message.includes('not found')) {
-      statusCode = 404;
-      errorResponse.error = error.message;
-    } else {
-      errorResponse.error = 'Internal server error';
-      errorResponse.details = process.env.NODE_ENV === 'development' ? error.message : 'An unexpected error occurred';
-    }
-
-    res.status(statusCode).json(errorResponse);
-  }
-
-  static wrapApiEndpoint(handler, endpointName) {
-    return async (req, res) => {
-      try {
-        await handler(req, res);
-      } catch (error) {
-        GlobalErrorHandler.handleApiError(error, req, res, endpointName);
-      }
-    };
-  }
-}
-
-// --------------------------------------------------------
-// 🔧 WRAPPER POUR VOS ENDPOINTS EXISTANTS - endpoint-wrapper.js
-
-// Exemple d'utilisation pour get-game-state-redis.mjs
-export function wrapGetGameState(originalHandler) {
-  return GlobalErrorHandler.wrapApiEndpoint(async (req, res) => {
-    try {
-      // Validation des paramètres
-      const { historyOnly } = req.query;
-      
-      if (historyOnly && historyOnly !== 'true' && historyOnly !== 'false') {
-        throw new Error('Invalid historyOnly parameter');
-      }
-
-      // Appel sécurisé de votre handler original
-      await originalHandler(req, res);
-      
-    } catch (error) {
-      // Si c'est une erreur Redis/JSON, suggérer le cleanup
-      if (error.message.includes('JSON') || error.message.includes('Redis')) {
-        throw new Error(`${error.message}. Run emergency cleanup at /api/redis-emergency-cleanup`);
-      }
-      throw error;
-    }
-  }, 'get-game-state-redis');
-}
-
-// Exemple d'utilisation pour join-game-redis.mjs
-export function wrapJoinGame(originalHandler) {
-  return GlobalErrorHandler.wrapApiEndpoint(async (req, res) => {
-    try {
-      // Validation des paramètres
-      const { playerName, rejoin } = req.body;
-      
-      if (!playerName || typeof playerName !== 'string' || !playerName.trim()) {
-        throw new Error('Player name is required and must be a valid string');
-      }
-
-      if (playerName.trim().length > 20) {
-        throw new Error('Player name must be 20 characters or less');
-      }
-
-      if (rejoin !== undefined && typeof rejoin !== 'boolean') {
-        throw new Error('Rejoin parameter must be boolean');
-      }
-
-      // Appel sécurisé
-      await originalHandler(req, res);
-      
-    } catch (error) {
-      throw error;
-    }
-  }, 'join-game-redis');
-}
-
-// --------------------------------------------------------
-// 🎯 COMMENT UTILISER DANS VOS ENDPOINTS :
-
-/*
-// Dans get-game-state-redis.mjs :
-import { wrapGetGameState } from './endpoint-wrapper.js';
-
-async function originalHandler(req, res) {
-  // Votre code existant...
-}
-
-export default wrapGetGameState(originalHandler);
-
-// Dans join-game-redis.mjs :
-import { wrapJoinGame } from './endpoint-wrapper.js';
-
-async function originalJoinHandler(req, res) {
-  // Votre code existant...
-}
-
-export default wrapJoinGame(originalJoinHandler);
-*/
