@@ -38,8 +38,8 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
             variant="secondary" 
             onClick={shufflePhotos}
           >
-            <Shuffle className="w-4 h-4 mr-1" />
-            Shuffle Order
+            <Shuffle className="w-4 h-4 mr-1  justify-self-center" />
+            <span className="col-span-2"> Shuffle Order</span>           
           </Button>
           <Button 
             size="sm" 
@@ -51,7 +51,8 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
           <Button size="sm" variant="secondary" onClick={selectAllPhotos}>
             Select All
           </Button>
-          <Button size="sm" variant="danger" onClick={clearAllPhotos}>
+          <Button size="sm" variant="danger" onClick={clearAllPhotos} className="self-start sm:self-auto flex-shrink-0 flex items-center">
+            <Trash2 className="w-4 h-4 mr-2" />
             Clear All
           </Button>
         </div>
@@ -64,7 +65,7 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
             onClick={shufflePhotos}
             className="flex-1 min-w-[120px]"
           >
-            <Shuffle className="w-4 h-4 mr-2" />
+            <Shuffle className="w-4 h-4 mr-2 justify-self-center" />
             <span className="hidden xs:inline">Shuffle Order</span>
             <span className="xs:hidden">Shuffle</span>
           </Button>
@@ -95,6 +96,7 @@ const PhotosManager = ({ photoManager, shuffleMessage }) => {
             onClick={clearAllPhotos}
             className="flex-1 min-w-[90px]"
           >
+            <Trash2 className="w-4 h-4 mr-2 justify-self-center" />
             <span className="hidden xs:inline">Clear All</span>
             <span className="xs:hidden">Clear</span>
           </Button>

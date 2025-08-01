@@ -26,9 +26,9 @@ const PlayersManager = ({ gameState, playerManager }) => {
               variant="danger" 
               onClick={clearAllPlayers}
               title="Remove all players (keeps game state)"
-              className="self-start sm:self-auto flex-shrink-0"
+              className="self-start sm:self-auto flex-shrink-0 flex items-center"
             >
-              <Trash2 className="w-4 h-4 mr-2" />  {/* CHANGEMENT 3: mr-1 → mr-2 */}
+              <Trash2 className="w-4 h-4 mr-2" /> 
               Clear All
             </Button>
           )}
