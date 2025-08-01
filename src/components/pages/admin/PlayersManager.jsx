@@ -8,16 +8,17 @@ const PlayersManager = ({ gameState, playerManager }) => {
 
   return (
     <Card
-      title={`Players`}
-      collapsedTitle={`Players (${gameState.players.length})`}
-      collapsibleOnlyOnMobile={true}
+      title={`Players (${gameState.players.length})`}
+      collapsedTitle={`Players (${gameState.players.length}) - ${Object.values(gameState.scores || {}).reduce((sum, score) => sum + score, 0)} total pts`}
+      collapsible={true}  // Behavior unchanged by default
       defaultExpanded={true}
       icon={<Users className="w-5 h-5" />}
     >
       {/* Description and Clear All Button */}
       <div className="mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <p className="text-gray-400 text-sm">
+        {/* Mobile: Button at top right */}
+        <div className="flex items-start justify-between gap-3 md:hidden">
+          <p className="text-gray-400 text-sm flex-1">
             Manage connected players and their scores
           </p>
           {gameState.players.length > 0 && (
@@ -26,11 +27,32 @@ const PlayersManager = ({ gameState, playerManager }) => {
               variant="danger" 
               onClick={clearAllPlayers}
               title="Remove all players (keeps game state)"
-              className="self-start sm:self-auto flex-shrink-0"
+              className="flex-shrink-0"
             >
-              <Trash2 className="w-4 h-4 mr-1" />
+              <Trash2 className="w-4 h-4 mr-2" />
               Clear All
             </Button>
+          )}
+        </div>
+
+        {/* Desktop: Stacked layout */}
+        <div className="hidden md:flex md:flex-col md:gap-3">
+          <p className="text-gray-400 text-sm">
+            Manage connected players and their scores
+          </p>
+          {gameState.players.length > 0 && (
+            <div className="flex justify-start">
+              <Button 
+                size="sm" 
+                variant="danger" 
+                onClick={clearAllPlayers}
+                title="Remove all players (keeps game state)"
+                className="flex items-center"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear All
+              </Button>
+            </div>
           )}
         </div>
       </div>
