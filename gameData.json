@@ -1,0 +1,41 @@
+{
+  "photos": [
+    {
+      "id": "1753963508370",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1753963508370_J_r_my.jpg",
+      "person": "Jérémy",
+      "uploadedAt": "2025-07-31T12:05:09.035Z"
+    },
+    {
+      "id": "1753963527729",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1753963527729_le_chat.jpg",
+      "person": "le chat",
+      "uploadedAt": "2025-07-31T12:05:28.385Z"
+    },
+    {
+      "id": "1753980605237",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1753980605237_Tigrou.jpg",
+      "person": "Tigrou",
+      "uploadedAt": "2025-07-31T16:50:05.896Z"
+    },
+    {
+      "id": "1753980676037",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1753980676037_Swik.jpg",
+      "person": "Swik",
+      "uploadedAt": "2025-07-31T16:51:17.449Z"
+    },
+    {
+      "id": "1753992717002",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1753992717002_Mad.jpg",
+      "person": "Mad",
+      "uploadedAt": "2025-07-31T20:11:58.146Z"
+    }
+  ],
+  "names": [
+    "Jérémy",
+    "le chat",
+    "Tigrou",
+    "Swik",
+    "Mad"
+  ]
+}
