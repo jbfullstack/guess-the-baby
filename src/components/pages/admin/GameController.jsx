@@ -80,7 +80,7 @@ const GameController = ({
           onClick={startGame}
           disabled={gameState.players.length === 0 || selectedPhotos.length === 0}
         >
-          <Play className="w-5 h-5 mr-2" />
+          <Play className="w-5 h-5 mr-2 justify-self-center" />
           Start Game
         </Button>
         
