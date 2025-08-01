@@ -29,7 +29,8 @@ const ActiveGame = ({
   // 🎮 FIX: Récupérer le timer depuis le serveur avec fallbacks appropriés
   const timerDuration = gameState.settings?.timePerPhoto || gameState.gameSettings?.timePerPhoto || 10;
   
-  const namesCount = actualGameState.names.length;
+  // ✅ CORRECTION PRINCIPALE :
+  const namesCount = gameState.names?.length || 0;
   
   // Déterminer le layout selon le nombre d'options
   const getLayoutConfig = (count) => {
@@ -62,6 +63,9 @@ const ActiveGame = ({
 
   const layoutConfig = getLayoutConfig(namesCount);
 
+  // ✅ PROTECTION contre les noms manquants
+  const availableNames = gameState.names || [];
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="max-w-md w-full text-center">
@@ -69,7 +73,7 @@ const ActiveGame = ({
         <div className="mb-4">
           <CountdownTimer 
             key={`timer-${gameState.currentRound}-${gameState.currentPhoto?.id}`}
-            seconds={timerDuration} // 🎮 FIX: Utiliser la valeur correcte
+            seconds={timerDuration}
             onComplete={onTimerExpired}
           />
           
@@ -89,11 +93,12 @@ const ActiveGame = ({
         {/* Photo */}
         <div className="mb-6">
           <div className="relative">
+            {/* ✅ CORRECTION PRINCIPALE : */}
            <img 
-              src={actualGameState.currentPhoto?.url} 
+              src={gameState.currentPhoto?.url} 
               alt="Baby photo" 
               className={`object-cover rounded-xl mx-auto border-4 border-purple-400 shadow-lg ${
-                namesCount <= 6 ? 'w-64 h-64' : 'w-48 h-48'  // 🆕 Taille adaptative
+                namesCount <= 6 ? 'w-64 h-64' : 'w-48 h-48'
               }`}
             />
             
@@ -123,30 +128,32 @@ const ActiveGame = ({
         
         {/* Question */}
         <h3 className={`font-semibold text-white mb-4 ${
-          namesCount <= 6 ? 'text-xl' : 'text-lg'  // 🆕 Taille adaptative
+          namesCount <= 6 ? 'text-xl' : 'text-lg'
         }`}>
           Who is this ?
         </h3>
         
         {/* Answer Options */}
-        <div className={`mb-4 ${layoutConfig.containerClass}`}>  {/* 🆕 Container adaptatif */}
-          {actualGameState.names.map(name => (
+        <div className={`mb-4 ${layoutConfig.containerClass}`}>
+          {/* ✅ CORRECTION PRINCIPALE : */}
+          {availableNames.map(name => (
             <button
               key={name}
               onClick={() => onSelectAnswer && onSelectAnswer(name)}
               disabled={hasSubmittedVote || hasTimerExpired}
-              className={`${layoutConfig.buttonClass} rounded-lg border-2 transition-all duration-200 font-medium 
-                actualGameState.selectedAnswer === name
+              className={`${layoutConfig.buttonClass} rounded-lg border-2 transition-all duration-200 font-medium ${
+                gameState.selectedAnswer === name
                   ? 'border-purple-400 bg-purple-400/20 text-white shadow-lg transform scale-105'
                   : hasSubmittedVote || hasTimerExpired
                   ? 'border-gray-500 bg-gray-500/10 text-gray-400 cursor-not-allowed'
                   : 'border-white/20 bg-white/5 text-gray-300 hover:border-purple-400/50 hover:bg-purple-400/10 hover:transform hover:scale-102'
               }`}
             >
-              <span className="truncate block">  {/* 🆕 Texte tronqué */}
+              <span className="truncate block">
                 {name}
               </span>
-              {actualGameState.selectedAnswer === name && actualGameState.selectedAnswer !== 'NO_ANSWER' && (
+              {/* ✅ CORRECTION PRINCIPALE : */}
+              {gameState.selectedAnswer === name && gameState.selectedAnswer !== 'NO_ANSWER' && (
                 <ArrowRight className="inline w-3 h-3 ml-1" />
               )}
             </button>
