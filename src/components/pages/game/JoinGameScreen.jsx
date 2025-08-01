@@ -26,6 +26,7 @@ const JoinGameScreen = ({ playerName, setPlayerName, onJoinGame, onBack, gameSta
   };
 
   const handleRejoinClick = () => {
+    setJoinError(''); // Clear any previous errors
     setShowPlayerSelection(true);
   };
 
@@ -65,17 +66,19 @@ const JoinGameScreen = ({ playerName, setPlayerName, onJoinGame, onBack, gameSta
           
           <div className="space-y-3 mb-6">
             {existingPlayers.length > 0 ? (
-              existingPlayers.map((player) => (
+              existingPlayers.map((player, index) => (
                 <Button
-                  key={player.id || player.name}
+                  key={player.id || player.name || index}
                   size="lg"
                   variant="secondary"
-                  className="w-full"
+                  className="w-full flex items-center justify-center"
                   onClick={() => handlePlayerSelect(player.name)}
                   disabled={isJoining}
                 >
-                  <Users className="w-5 h-5 mr-2" />
-                  {isJoining ? 'Rejoining...' : `Rejoin as "${player.name}"`}
+                  <Users className="w-5 h-5 mr-2 flex-shrink-0" />
+                  <span className="truncate">
+                    {isJoining ? 'Rejoining...' : `Rejoin as "${player.name}"`}
+                  </span>
                 </Button>
               ))
             ) : (
@@ -87,12 +90,12 @@ const JoinGameScreen = ({ playerName, setPlayerName, onJoinGame, onBack, gameSta
           
           <Button
             variant="secondary"
-            className="w-full"
+            className="w-full flex items-center justify-center"
             onClick={() => setShowPlayerSelection(false)}
             disabled={isJoining}
           >
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back to Join
+            <ArrowLeft className="w-5 h-5 mr-2 flex-shrink-0" />
+            <span>Back to Join</span>
           </Button>
         </Card>
       </div>
@@ -143,16 +146,16 @@ const JoinGameScreen = ({ playerName, setPlayerName, onJoinGame, onBack, gameSta
             <span className="text-sm text-gray-400 bg-gray-800 px-2 py-1 rounded">or</span>
           </div>
           
-          {/* Rejoin Game button - ALWAYS ENABLED */}
+          {/* Rejoin Game button - ALWAYS ENABLED, IGNORES INPUT */}
           <Button 
             size="lg" 
             variant="secondary"
-            className="w-full" 
+            className="w-full flex items-center justify-center" 
             onClick={handleRejoinClick}
             disabled={isJoining}
           >
-            <RefreshCw className="w-5 h-5 mr-2" />
-            Rejoin Game
+            <RefreshCw className="w-5 h-5 mr-2 flex-shrink-0" />
+            <span>Rejoin Game</span>
           </Button>
           
           {/* Back button */}

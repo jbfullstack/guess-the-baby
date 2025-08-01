@@ -23,29 +23,55 @@ const HomePage = () => {
         <p className="text-gray-300 mb-8">Guess who's who in these adorable baby photos!</p>
         
         <div className="space-y-4">
-          <Button size="lg" className="w-full" onClick={() => actions.setView('upload')}>
-            <Upload className="w-5 h-5 mr-2" />
-            Upload Photo
+          <Button 
+            size="lg" 
+            className="w-full" 
+            onClick={() => actions.setView('upload')}
+          >
+            <div className="grid grid-cols-4 items-center w-full">
+              <Upload className="w-5 h-5 justify-self-center" />
+              <span className="col-span-2">Upload Photo</span>
+            </div>
           </Button>
           
-          <Button size="lg" className="w-full" onClick={() => actions.setView('game')}>
-            <Play className="w-5 h-5 mr-2" />
-            Join Game
+          <Button 
+            size="lg" 
+            className="w-full" 
+            onClick={() => actions.setView('game')}
+          >
+            <div className="grid grid-cols-4 items-center w-full">
+              <Play className="w-5 h-5 justify-self-center" />
+              <span className="col-span-2">Join Game</span>
+            </div>
           </Button>
           
-          <Button variant="secondary" size="lg" className="w-full" onClick={() => {
-            actions.setView('admin');
-          }}>
-            <Settings className="w-5 h-5 mr-2" />
-            Admin Panel
+          <Button 
+            variant="secondary" 
+            size="lg" 
+            className="w-full" 
+            onClick={() => {
+              actions.setView('admin');
+            }}
+          >
+            <div className="grid grid-cols-4 items-center w-full">
+              <Settings className="w-5 h-5 justify-self-center" />
+              <span className="col-span-2">Admin Panel</span>
+            </div>
           </Button>
           
-          <Button variant="secondary" size="lg" className="w-full" onClick={() => {
-            actions.getHistory();
-            actions.setView('history');
-          }}>
-            <Trophy className="w-5 h-5 mr-2" />
-            Game History
+          <Button 
+            variant="secondary" 
+            size="lg" 
+            className="w-full" 
+            onClick={() => {
+              actions.getHistory();
+              actions.setView('history');
+            }}
+          >
+            <div className="grid grid-cols-4 items-center w-full">
+              <Trophy className="w-5 h-5 justify-self-center" />
+              <span className="col-span-2">Game History</span>
+            </div>
           </Button>
         </div>
       </Card>
