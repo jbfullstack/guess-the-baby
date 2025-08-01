@@ -1,6 +1,6 @@
 // 🛡️ REDIS SERVICE ULTRA-ROBUSTE - Version corrigée
 import { Redis } from '@upstash/redis';
-import { SafeRedisOps, RedisValidator, RedisRecovery } from './redis-helpers.js';
+import { SafeRedisOps, RedisValidator, RedisRecovery } from '../utils/redis-helpers.js';
 import { DEFAULT_TIME_PER_ROUND } from '../constants.js';
 
 // Initialize Redis client
