@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1754065581775,
+    "date": 1754065581775,
+    "endedAt": "2025-08-01T16:29:52.437Z",
+    "players": [
+      {
+        "name": "Mad",
+        "score": 1160
+      },
+      {
+        "name": "Dje",
+        "score": 643
+      }
+    ],
+    "winner": "Mad",
+    "totalRounds": 10,
+    "duration": "3:30",
+    "photosUsed": 10,
+    "settings": {
+      "timePerPhoto": 12
+    }
+  }
+]
