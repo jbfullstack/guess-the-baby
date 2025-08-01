@@ -7,6 +7,7 @@ import WaitingRoom from './WaitingRoom';
 import GameFinished from './GameFinished';
 import ActiveGame from './ActiveGame';
 import LoadingScreen from './LoadingScreen';
+import PreloadingScreen from './PreloadingScreen';
 
 const GamePage = () => {
   const { gameState, actions } = useGame();
@@ -156,6 +157,22 @@ const GamePage = () => {
     actions.updateGameState({ selectedAnswer: answer });
   };
 
+  const handlePreloadComplete = async (preloadData) => {
+    try {
+      console.log('🖼️ [GAME PAGE] Signaling preload completion:', preloadData);
+      
+      // Use the submit vote endpoint with special PRELOAD_COMPLETE answer
+      const result = await actions.submitVote('PRELOAD_COMPLETE');
+      
+      console.log('✅ [GAME PAGE] Preload completion signaled successfully');
+      return result;
+      
+    } catch (error) {
+      console.error('❌ [GAME PAGE] Failed to signal preload completion:', error);
+      throw error;
+    }
+  };
+
   // Leave game handler
   const handleLeaveGame = async () => {
     if (window.confirm('Are you sure you want to leave the game?')) {
@@ -242,6 +259,17 @@ const GamePage = () => {
       />
     );
   }
+
+  if (gameState.gameMode === 'preloading') {
+    return (
+      <PreloadingScreen
+        gameState={gameState}
+        onPreloadComplete={handlePreloadComplete}
+        onLeaveGame={handleLeaveGame}
+      />
+    );
+  }
+  
 
   // 🏁 CRITICAL FIX: Multiple conditions for game finished
   if (gameState.gameMode === 'finished' || gameResult) {

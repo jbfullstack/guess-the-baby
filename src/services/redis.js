@@ -37,7 +37,8 @@ export const GameStateRedis = {
         redis.get('game:settings'),
         redis.get('game:roundstart'),
         redis.get('game:winner'),
-        redis.get('game:ended')
+        redis.get('game:ended'),
+        redis.get('game:preloading')
       ]);
 
       console.log('[REDIS] Raw values:', {
@@ -73,7 +74,8 @@ export const GameStateRedis = {
         settings: safeJsonParse(settings, { timePerPhoto: DEFAULT_TIME_PER_ROUND }),
         roundStartTime: roundStartTime || null,
         winner: winner || null,
-        endedAt: endedAt || null
+        endedAt: endedAt || null,
+        preloadingPlayers: safeJsonParse(preloadingPlayers, {})
       };
 
       console.log('[REDIS] ✅ Parsed game state:', {
@@ -117,6 +119,7 @@ export const GameStateRedis = {
       if (gameState.roundStartTime !== undefined) pipeline.set('game:roundstart', gameState.roundStartTime.toString(), { ex: 7200 });
       if (gameState.winner !== undefined) pipeline.set('game:winner', gameState.winner, { ex: 7200 });
       if (gameState.endedAt !== undefined) pipeline.set('game:ended', gameState.endedAt, { ex: 7200 });
+      if (gameState.preloadingPlayers !== undefined) pipeline.set('game:preloading', JSON.stringify(gameState.preloadingPlayers), { ex: 7200 });
 
       await pipeline.exec();
       console.log('[REDIS] ✅ Game state set successfully');
@@ -142,7 +145,8 @@ export const GameStateRedis = {
         settings: 'game:settings',
         roundStartTime: 'game:roundstart',
         winner: 'game:winner',
-        endedAt: 'game:ended'
+        endedAt: 'game:ended',
+        preloadingPlayers: 'game:preloading'
       };
 
       const redisKey = keyMap[field];
@@ -185,7 +189,7 @@ export const GameStateRedis = {
       const keysToDelete = [
         'game:id', 'game:mode', 'game:round', 'game:photo', 'game:total',
         'game:start', 'game:photos', 'game:settings', 'game:roundstart',
-        'game:winner', 'game:ended'
+        'game:winner', 'game:ended', 'game:preloading'
       ];
 
       const pipeline = redis.pipeline();

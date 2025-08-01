@@ -244,6 +244,30 @@ export const GameProvider = ({ children }) => {
       }
     });
 
+    channel.bind('preloading-started', (data) => {
+      console.log('🖼️ Preloading phase started:', data);
+      updateGameState({
+        gameMode: 'preloading',
+        gameId: data.gameId,
+        selectedPhotos: data.selectedPhotos,
+        totalPhotos: data.totalPhotos,
+        settings: data.settings || { timePerPhoto: DEFAULT_TIME_PER_ROUND },
+        preloadingPlayers: {}
+      });
+    });
+
+    channel.bind('preload-progress', (data) => {
+      console.log('🔄 Preload progress update:', data);
+      updateGameState({
+        preloadingPlayers: data.readyPlayers
+      });
+    });
+
+    channel.bind('preload-error', (data) => {
+      console.error('🚨 Preload error:', data);
+      alert(`Preload error: ${data.error}\nDetails: ${data.details}`);
+    });
+
     channel.bind('game-started', (data) => {
       console.log('🎮 Game started:', data);
       updateGameState({

@@ -34,8 +34,8 @@ export default async function handler(req, res) {
     const newGameId = Date.now().toString();
     const gameState = {
       gameId: newGameId,
-      gameMode: 'playing',
-      currentRound: 1,
+      gameMode: 'preloading',
+      currentRound: 0,
       totalPhotos: selectedPhotos.length,
       currentPhoto: JSON.stringify({
         id: selectedPhotos[0].id,
@@ -82,17 +82,13 @@ export default async function handler(req, res) {
     await VotesRedis.setTotalPlayers(1, players.length);
 
     // 6. Notify all clients that the game has started
-    await pusher.trigger('baby-game', 'game-started', {
+    await pusher.trigger('baby-game', 'preloading-started', {
       gameId: newGameId,
-      photo: {
-        id: selectedPhotos[0].id,
-        url: selectedPhotos[0].url
-      },
+      selectedPhotos: selectedPhotos, // 🎯 ENVOYER TOUTES LES PHOTOS
       settings: { timePerPhoto },
       totalPhotos: selectedPhotos.length,
-      currentRound: 1,
       players: players,
-      gameMode: 'playing'
+      gameMode: 'preloading'
     });
 
     const responseTime = Date.now() - startTime;

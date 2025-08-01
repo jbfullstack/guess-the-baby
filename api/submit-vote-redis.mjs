@@ -58,6 +58,11 @@ export default async function handler(req, res) {
 
     console.log(`[VOTE] 🎮 Processing vote: ${playerName} -> ${answer}`);
 
+    // 🎯 SPECIAL HANDLING FOR PRELOAD COMPLETION
+    if (answer === 'PRELOAD_COMPLETE') {
+      return await handlePreloadComplete(playerName, gameId, res, startTime);
+    }
+
     // 1. Get current game state from Redis - FIXED avec nouvelles clés
     const gameState = await GameStateRedis.getCurrentGame();
     
@@ -320,6 +325,142 @@ export default async function handler(req, res) {
     res.status(500).json({ 
       error: error.message,
       responseTime: `${Date.now() - startTime}ms`
+    });
+  }
+}
+
+// Handle preload completion signals
+async function handlePreloadComplete(playerName, gameId, res, startTime) {
+  try {
+    console.log(`[PRELOAD] 🖼️ Player ${playerName} completed preloading`);
+    
+    // Get current game state
+    const gameState = await GameStateRedis.getCurrentGame();
+    
+    if (gameState.gameMode !== 'preloading') {
+      return res.status(400).json({ 
+        error: 'Game is not in preloading mode',
+        currentMode: gameState.gameMode 
+      });
+    }
+    
+    // Parse current preloading players
+    let preloadingPlayers = {};
+    try {
+      if (gameState.preloadingPlayers) {
+        preloadingPlayers = JSON.parse(gameState.preloadingPlayers);
+      }
+    } catch (error) {
+      console.warn('[PRELOAD] Failed to parse preloadingPlayers, using empty object');
+    }
+    
+    // Add this player to ready list
+    preloadingPlayers[playerName] = {
+      readyAt: new Date().toISOString(),
+      timestamp: Date.now()
+    };
+    
+    // Update Redis with new ready player
+    await GameStateRedis.updateGameField('preloadingPlayers', preloadingPlayers);
+    
+    // Get current players count
+    const players = await PlayersRedis.getPlayers();
+    const totalPlayers = players.length;
+    const readyPlayers = Object.keys(preloadingPlayers).length;
+    
+    console.log(`[PRELOAD] 📊 Ready players: ${readyPlayers}/${totalPlayers}`);
+    
+    // Notify all clients about readiness update
+    await pusher.trigger('baby-game', 'preload-progress', {
+      readyPlayers: preloadingPlayers,
+      readyCount: readyPlayers,
+      totalPlayers: totalPlayers,
+      allReady: readyPlayers >= totalPlayers
+    });
+    
+    // Check if all players are ready to start the actual game
+    if (readyPlayers >= totalPlayers) {
+      console.log(`[PRELOAD] 🎮 All players ready! Starting actual game...`);
+      
+      try {
+        // Parse selected photos for game start
+        const selectedPhotos = JSON.parse(gameState.selectedPhotos || '[]');
+        const gameSettings = JSON.parse(gameState.settings || '{}');
+        
+        if (selectedPhotos.length === 0) {
+          throw new Error('No photos available for game start');
+        }
+        
+        // Update game state to playing
+        await GameStateRedis.updateGameField('gameMode', 'playing');
+        await GameStateRedis.updateGameField('currentRound', 1);
+        await GameStateRedis.updateGameField('roundStartTime', Date.now());
+        
+        // Clear preloading players data
+        await GameStateRedis.updateGameField('preloadingPlayers', {});
+        
+        // Initialize scores for all players
+        const playerNames = players.map(p => p.name);
+        await ScoresRedis.resetScores();
+        const initializedScores = await ScoresRedis.initializeScores(playerNames);
+        console.log('[PRELOAD] ✅ Scores initialized:', initializedScores);
+        
+        // Set up vote counting for round 1
+        await VotesRedis.setTotalPlayers(1, players.length);
+        
+        // Start the actual game
+        await pusher.trigger('baby-game', 'game-started', {
+          gameId: gameState.gameId,
+          photo: {
+            id: selectedPhotos[0].id,
+            url: selectedPhotos[0].url
+          },
+          settings: gameSettings,
+          totalPhotos: selectedPhotos.length,
+          currentRound: 1,
+          players: players,
+          gameMode: 'playing'
+        });
+        
+        console.log(`[PRELOAD] ✅ Game officially started! First photo: ${selectedPhotos[0].id}`);
+        
+      } catch (error) {
+        console.error('[PRELOAD] ❌ Failed to start game after preloading:', error);
+        
+        // Notify clients about the error
+        await pusher.trigger('baby-game', 'preload-error', {
+          error: 'Failed to start game after preloading',
+          details: error.message
+        });
+        
+        return res.status(500).json({
+          error: 'Failed to start game after preloading',
+          details: error.message,
+          responseTime: `${Date.now() - startTime}ms`
+        });
+      }
+    }
+    
+    const responseTime = Date.now() - startTime;
+    
+    return res.json({
+      success: true,
+      message: 'Preload completion recorded',
+      readyPlayers: readyPlayers,
+      totalPlayers: totalPlayers,
+      allReady: readyPlayers >= totalPlayers,
+      gameStarted: readyPlayers >= totalPlayers,
+      responseTime: `${responseTime}ms`
+    });
+    
+  } catch (error) {
+    console.error('[PRELOAD] ❌ Error handling preload completion:', error);
+    
+    const responseTime = Date.now() - startTime;
+    return res.status(500).json({
+      error: 'Failed to handle preload completion',
+      details: error.message,
+      responseTime: `${responseTime}ms`
     });
   }
 }
