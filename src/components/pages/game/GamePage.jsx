@@ -229,6 +229,7 @@ const GamePage = () => {
         setPlayerName={setPlayerName}
         onJoinGame={handleJoinGame}
         onBack={handleBackToHome}
+        gameState={gameState}
       />
     );
   }
