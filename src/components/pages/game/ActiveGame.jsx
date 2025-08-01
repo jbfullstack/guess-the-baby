@@ -29,11 +29,38 @@ const ActiveGame = ({
   // 🎮 FIX: Récupérer le timer depuis le serveur avec fallbacks appropriés
   const timerDuration = gameState.settings?.timePerPhoto || gameState.gameSettings?.timePerPhoto || 10;
   
-  console.log('🎮 [ACTIVE GAME] Timer settings:', {
-    serverSettings: gameState.settings,
-    localSettings: gameState.gameSettings,
-    finalDuration: timerDuration
-  });
+  const namesCount = actualGameState.names.length;
+  
+  // Déterminer le layout selon le nombre d'options
+  const getLayoutConfig = (count) => {
+    if (count <= 4) {
+      return {
+        layout: 'vertical',
+        containerClass: 'space-y-3',
+        buttonClass: 'w-full p-4 text-lg'
+      };
+    } else if (count <= 6) {
+      return {
+        layout: 'grid-2col',
+        containerClass: 'grid grid-cols-2 gap-3',
+        buttonClass: 'p-3 text-base'
+      };
+    } else if (count <= 9) {
+      return {
+        layout: 'grid-3col',
+        containerClass: 'grid grid-cols-3 gap-2',
+        buttonClass: 'p-2 text-sm'
+      };
+    } else {
+      return {
+        layout: 'scroll-grid',
+        containerClass: 'grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-2',
+        buttonClass: 'p-2 text-xs'
+      };
+    }
+  };
+
+  const layoutConfig = getLayoutConfig(namesCount);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -62,10 +89,12 @@ const ActiveGame = ({
         {/* Photo */}
         <div className="mb-6">
           <div className="relative">
-            <img 
-              src={gameState.currentPhoto?.url} 
+           <img 
+              src={actualGameState.currentPhoto?.url} 
               alt="Baby photo" 
-              className="w-64 h-64 object-cover rounded-xl mx-auto border-4 border-purple-400 shadow-lg"
+              className={`object-cover rounded-xl mx-auto border-4 border-purple-400 shadow-lg ${
+                namesCount <= 6 ? 'w-64 h-64' : 'w-48 h-48'  // 🆕 Taille adaptative
+              }`}
             />
             
             {/* 🔧 FIX: Answer Status - Show only AFTER submission, not after selection */}
@@ -93,32 +122,43 @@ const ActiveGame = ({
         </div>
         
         {/* Question */}
-        <h3 className="text-xl font-semibold text-white mb-6">
-          Who is this adorable baby? 👶
+        <h3 className={`font-semibold text-white mb-4 ${
+          namesCount <= 6 ? 'text-xl' : 'text-lg'  // 🆕 Taille adaptative
+        }`}>
+          Who is this ?
         </h3>
         
         {/* Answer Options */}
-        <div className="space-y-3 mb-6">
-          {gameState.names.map(name => (
+        <div className={`mb-4 ${layoutConfig.containerClass}`}>  {/* 🆕 Container adaptatif */}
+          {actualGameState.names.map(name => (
             <button
               key={name}
-              onClick={() => onSelectAnswer(name)}
+              onClick={() => onSelectAnswer && onSelectAnswer(name)}
               disabled={hasSubmittedVote || hasTimerExpired}
-              className={`w-full p-3 rounded-lg border-2 transition-all duration-200 font-medium ${
-                gameState.selectedAnswer === name
+              className={`${layoutConfig.buttonClass} rounded-lg border-2 transition-all duration-200 font-medium 
+                actualGameState.selectedAnswer === name
                   ? 'border-purple-400 bg-purple-400/20 text-white shadow-lg transform scale-105'
                   : hasSubmittedVote || hasTimerExpired
                   ? 'border-gray-500 bg-gray-500/10 text-gray-400 cursor-not-allowed'
                   : 'border-white/20 bg-white/5 text-gray-300 hover:border-purple-400/50 hover:bg-purple-400/10 hover:transform hover:scale-102'
               }`}
             >
-              {name}
-              {gameState.selectedAnswer === name && gameState.selectedAnswer !== 'NO_ANSWER' && (
-                <ArrowRight className="inline w-4 h-4 ml-2" />
+              <span className="truncate block">  {/* 🆕 Texte tronqué */}
+                {name}
+              </span>
+              {actualGameState.selectedAnswer === name && actualGameState.selectedAnswer !== 'NO_ANSWER' && (
+                <ArrowRight className="inline w-3 h-3 ml-1" />
               )}
             </button>
           ))}
         </div>
+
+        {/* Scroll indicator pour beaucoup d'options */}
+        {namesCount > 9 && (
+          <div className="text-xs text-gray-400 mb-3">
+            ↕️ Scroll to see all options
+          </div>
+        )}
         
         {/* Submit Button */}
         <Button 
