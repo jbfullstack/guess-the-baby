@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GameProvider } from './context/GameContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { useGame } from './hooks/useGame';
 import ConnectionStatus from './components/layout/ConnectionStatus';
 
@@ -82,9 +83,11 @@ const GameApp = () => {
 // Root App Component
 function App() {
   return (
-    <GameProvider>
-      <GameApp />
-    </GameProvider>
+    <LanguageProvider>
+      <GameProvider>
+        <GameApp />
+      </GameProvider>
+    </LanguageProvider>
   );
 }
 

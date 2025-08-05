@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, Eye, EyeOff } from 'lucide-react';
 import { useGame } from '../../hooks/useGame';
+import LanguageSelector from '../ui/LanguageSelector';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 
@@ -33,6 +34,13 @@ const AdminAuth = () => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
+        <div className="flex justify-end mb-4">
+         <LanguageSelector 
+          flagStyle="css"
+          variant="compact"
+         />
+        </div>
+        
         <div className="text-center mb-6">
           <Shield className="w-16 h-16 mx-auto mb-4 text-purple-400" />
           <h2 className="text-2xl font-bold text-white mb-2">Admin Access</h2>
