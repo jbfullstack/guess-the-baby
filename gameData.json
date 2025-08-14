@@ -65,12 +65,19 @@
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1754065560319_Mad.jpg",
       "person": "Mad",
       "uploadedAt": "2025-08-01T16:26:02.051Z"
+    },
+    {
+      "id": "1755208467870",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1755208467870_Raph.jpg",
+      "person": "Raph",
+      "uploadedAt": "2025-08-14T21:54:28.548Z"
     }
   ],
   "names": [
     "Jérémy",
     "Tigrou",
     "Swik",
-    "Mad"
+    "Mad",
+    "Raph"
   ]
 }
