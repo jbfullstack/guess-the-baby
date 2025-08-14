@@ -95,6 +95,12 @@
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1755208851584_Chaa.jpg",
       "person": "Chaa",
       "uploadedAt": "2025-08-14T22:00:53.029Z"
+    },
+    {
+      "id": "1755208929791",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1755208929791_Medhy.jpg",
+      "person": "Medhy",
+      "uploadedAt": "2025-08-14T22:02:10.648Z"
     }
   ],
   "names": [
@@ -105,6 +111,7 @@
     "Raph",
     "Cahouette",
     "Raph²",
-    "Chaa"
+    "Chaa",
+    "Medhy"
   ]
 }
