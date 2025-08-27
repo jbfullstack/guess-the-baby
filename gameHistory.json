@@ -1,5 +1,23 @@
 [
   {
+    "id": 1756275459643,
+    "date": 1756275459643,
+    "endedAt": "2025-08-27T06:19:40.938Z",
+    "players": [
+      {
+        "name": "Dje",
+        "score": 1203
+      }
+    ],
+    "winner": "Dje",
+    "totalRounds": 9,
+    "duration": "2:01",
+    "photosUsed": 9,
+    "settings": {
+      "timePerPhoto": 12
+    }
+  },
+  {
     "id": 1755209041105,
     "date": 1755209041105,
     "endedAt": "2025-08-14T22:07:37.893Z",
