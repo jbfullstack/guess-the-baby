@@ -173,6 +173,12 @@
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756969673033_Kevin.jpg",
       "person": "Kevin",
       "uploadedAt": "2025-09-04T07:07:54.007Z"
+    },
+    {
+      "id": "1756969953609",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756969953609_Valentin.jpg",
+      "person": "Valentin",
+      "uploadedAt": "2025-09-04T07:12:34.690Z"
     }
   ],
   "names": [
@@ -193,6 +199,7 @@
     "Anaële",
     "Alice",
     "Coralie",
-    "Kevin"
+    "Kevin",
+    "Valentin"
   ]
 }
