@@ -19,12 +19,6 @@
       "uploadedAt": "2025-08-14T21:57:20.845Z"
     },
     {
-      "id": "1755208643695",
-      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1755208643695_Raph_.jpg",
-      "person": "Raph²",
-      "uploadedAt": "2025-08-14T21:57:24.288Z"
-    },
-    {
       "id": "1755208851584",
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1755208851584_Chaa.jpg",
       "person": "Chaa",
@@ -129,7 +123,6 @@
   ],
   "names": [
     "Cahouette",
-    "Raph²",
     "Chaa",
     "Rémy",
     "Jochen",
