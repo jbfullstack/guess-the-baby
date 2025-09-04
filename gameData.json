@@ -113,6 +113,12 @@
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756968825445_R_my.jpg",
       "person": "Rémy",
       "uploadedAt": "2025-09-04T06:53:46.489Z"
+    },
+    {
+      "id": "1756968874972",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756968874972_Jochen.jpg",
+      "person": "Jochen",
+      "uploadedAt": "2025-09-04T06:54:35.654Z"
     }
   ],
   "names": [
@@ -125,6 +131,7 @@
     "Raph²",
     "Chaa",
     "Medhy",
-    "Rémy"
+    "Rémy",
+    "Jochen"
   ]
 }
