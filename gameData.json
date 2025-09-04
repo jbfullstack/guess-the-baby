@@ -149,6 +149,12 @@
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756969020086_Jochen.jpg",
       "person": "Jochen",
       "uploadedAt": "2025-09-04T06:57:00.770Z"
+    },
+    {
+      "id": "1756969063113",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756969063113_Ma_lle.jpg",
+      "person": "Maëlle",
+      "uploadedAt": "2025-09-04T06:57:43.819Z"
     }
   ],
   "names": [
@@ -164,6 +170,7 @@
     "Rémy",
     "Jochen",
     "Tom",
-    "Jessica"
+    "Jessica",
+    "Maëlle"
   ]
 }
