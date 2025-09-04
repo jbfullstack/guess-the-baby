@@ -69,7 +69,7 @@
     {
       "id": "1756969075177",
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756969075177_Cahouette.jpg",
-      "person": "Cécile (Cahouette)",
+      "person": "Cécile",
       "uploadedAt": "2025-09-04T06:57:55.743Z"
     },
     {
@@ -148,6 +148,7 @@
     "Madeleine",
     "Jérémy",
     "Camille",
-    "Loïc"
+    "Loïc",
+    "Cécile"
   ]
 }
