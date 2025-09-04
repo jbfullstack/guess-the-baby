@@ -7,12 +7,6 @@
       "uploadedAt": "2025-08-01T16:26:02.051Z"
     },
     {
-      "id": "1755208467870",
-      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1755208467870_Raph.jpg",
-      "person": "Raph",
-      "uploadedAt": "2025-08-14T21:54:28.548Z"
-    },
-    {
       "id": "1755208609465",
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1755208609465_Swik.jpg",
       "person": "Loïc (Swik)",
@@ -134,7 +128,6 @@
     }
   ],
   "names": [
-    "Raph",
     "Cahouette",
     "Raph²",
     "Chaa",
