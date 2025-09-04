@@ -185,6 +185,12 @@
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756969171948_Ana_le.jpg",
       "person": "Anaële",
       "uploadedAt": "2025-09-04T06:59:32.872Z"
+    },
+    {
+      "id": "1756969208809",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756969208809_Coralie.jpg",
+      "person": "Coralie",
+      "uploadedAt": "2025-09-04T07:00:10.044Z"
     }
   ],
   "names": [
@@ -203,6 +209,7 @@
     "Jessica",
     "Maëlle",
     "Anaële",
-    "Alice"
+    "Alice",
+    "Coralie"
   ]
 }
