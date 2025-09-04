@@ -1,12 +1,6 @@
 {
   "photos": [
     {
-      "id": "1753963508370",
-      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1753963508370_J_r_my.jpg",
-      "person": "Jérémy",
-      "uploadedAt": "2025-07-31T12:05:09.035Z"
-    },
-    {
       "id": "1753980605237",
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1753980605237_Tigrou.jpg",
       "person": "Tigrou",
