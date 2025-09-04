@@ -9,7 +9,7 @@
     {
       "id": "1755208609465",
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1755208609465_Swik.jpg",
-      "person": "Loïc (Swik)",
+      "person": "Loïc",
       "uploadedAt": "2025-08-14T21:56:50.639Z"
     },
     {
@@ -145,9 +145,9 @@
     "Kevin",
     "Valentin",
     "Cécile (Cahouette)",
-    "Loïc (Swik)",
     "Madeleine",
     "Jérémy",
-    "Camille"
+    "Camille",
+    "Loïc"
   ]
 }
