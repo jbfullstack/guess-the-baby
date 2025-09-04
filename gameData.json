@@ -1,12 +1,6 @@
 {
   "photos": [
     {
-      "id": "1754056680757",
-      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1754056680757_Tigrou.jpg",
-      "person": "Tigrou",
-      "uploadedAt": "2025-08-01T13:58:01.542Z"
-    },
-    {
       "id": "1754059719056",
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1754059719056_J_r_my.jpg",
       "person": "Jérémy",
@@ -171,7 +165,6 @@
   ],
   "names": [
     "Jérémy",
-    "Tigrou",
     "Swik",
     "Mad",
     "Raph",
