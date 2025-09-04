@@ -161,6 +161,12 @@
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756969075177_Cahouette.jpg",
       "person": "Cahouette",
       "uploadedAt": "2025-09-04T06:57:55.743Z"
+    },
+    {
+      "id": "1756969095252",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756969095252_Ana_le.jpg",
+      "person": "Anaële",
+      "uploadedAt": "2025-09-04T06:58:16.110Z"
     }
   ],
   "names": [
@@ -177,6 +183,7 @@
     "Jochen",
     "Tom",
     "Jessica",
-    "Maëlle"
+    "Maëlle",
+    "Anaële"
   ]
 }
