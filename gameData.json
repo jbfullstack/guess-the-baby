@@ -119,6 +119,12 @@
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756970733951_J_r_my.jpg",
       "person": "Jérémy",
       "uploadedAt": "2025-09-04T07:25:34.856Z"
+    },
+    {
+      "id": "1756981434949",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756981434949_Camille.jpg",
+      "person": "Camille",
+      "uploadedAt": "2025-09-04T10:23:55.869Z"
     }
   ],
   "names": [
@@ -135,6 +141,7 @@
     "Cécile (Cahouette)",
     "Loïc (Swik)",
     "Madeleine",
-    "Jérémy"
+    "Jérémy",
+    "Camille"
   ]
 }
