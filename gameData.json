@@ -131,6 +131,12 @@
       "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1756981448304_Camille.jpg",
       "person": "Camille",
       "uploadedAt": "2025-09-04T10:24:09.059Z"
+    },
+    {
+      "id": "1757188833533",
+      "url": "https://raw.githubusercontent.com/jbfullstack/guess-the-baby/main/photos/1757188833533_L_a.jpg",
+      "person": "Léa",
+      "uploadedAt": "2025-09-06T20:00:34.165Z"
     }
   ],
   "names": [
@@ -148,6 +154,7 @@
     "Jérémy",
     "Camille",
     "Loïc",
-    "Cécile"
+    "Cécile",
+    "Léa"
   ]
 }
